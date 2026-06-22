@@ -2,6 +2,8 @@ import SwiftUI
 
 struct BottomToolbar: View {
     @ObservedObject var tab: Tab
+    let tabCount: Int
+    let onShowTabs: () -> Void
 
     var body: some View {
         HStack {
@@ -12,6 +14,10 @@ struct BottomToolbar: View {
                 .disabled(!tab.canGoForward)
             Spacer()
             Button(action: tab.reload) { Image(systemName: "arrow.clockwise") }
+            Spacer()
+            Button(action: onShowTabs) {
+                Label("\(tabCount)", systemImage: "square.on.square")
+            }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 8)
