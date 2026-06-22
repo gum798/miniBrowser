@@ -10,7 +10,7 @@ struct TabSwitcherView: View {
         VStack(spacing: 0) {
             HStack {
                 Button("새 탭") {
-                    model.newTab(url: URL(string: "https://www.google.com")!)
+                    model.newTab()      // start page
                     isPresented = false
                 }
                 Spacer()

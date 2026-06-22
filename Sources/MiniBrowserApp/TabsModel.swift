@@ -33,7 +33,7 @@ final class TabsModel: ObservableObject {
         state.close(id)
         tabs.removeAll { $0.id == id }
         sync()
-        if tabs.isEmpty { newTab(url: URL(string: "https://www.google.com")!) }
+        if tabs.isEmpty { newTab() }   // start page (no URL)
     }
 
     func select(_ id: UUID) {

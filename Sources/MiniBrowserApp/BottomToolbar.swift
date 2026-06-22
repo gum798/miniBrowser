@@ -3,6 +3,8 @@ import SwiftUI
 struct BottomToolbar: View {
     @ObservedObject var tab: Tab
     let tabCount: Int
+    let isBookmarked: Bool
+    let onToggleBookmark: () -> Void
     let onShowTabs: () -> Void
 
     var body: some View {
@@ -13,7 +15,10 @@ struct BottomToolbar: View {
             Button(action: tab.goForward) { Image(systemName: "chevron.right") }
                 .disabled(!tab.canGoForward)
             Spacer()
-            Button(action: tab.reload) { Image(systemName: "arrow.clockwise") }
+            Button(action: onToggleBookmark) {
+                Image(systemName: isBookmarked ? "star.fill" : "star")
+            }
+            .disabled(tab.url == nil)
             Spacer()
             Button(action: onShowTabs) {
                 Label("\(tabCount)", systemImage: "square.on.square")
