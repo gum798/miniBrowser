@@ -15,21 +15,9 @@ struct MiniBrowserApp: App {
 
     var body: some Scene {
         WindowGroup {
-            SmokeView()
-                .frame(width: 390, height: 844)   // G3: phone width
+            BrowserView()
+                .frame(width: 390, height: 844)
         }
         .windowResizability(.contentSize)
-    }
-}
-
-struct SmokeView: View {
-    @State private var typed = ""
-    var body: some View {
-        VStack(spacing: 0) {
-            TextField("Type here to verify keyboard focus (G1)", text: $typed)
-                .textFieldStyle(.roundedBorder)
-                .padding(8)
-            SmokeWebView(urlString: "https://www.google.com")
-        }
     }
 }
