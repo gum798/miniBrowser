@@ -10,19 +10,23 @@ final class TabsModel: ObservableObject {
 
     private var state = TabsState()
 
+    /// Canonical store of Tab instances, keyed by id. `sync()` is the sole writer of `tabs[]`,
+    /// which it rebuilds from `state.tabIDs` using this registry — so there is no duplicate-key trap.
+    private var tabsByID: [UUID: Tab] = [:]
+
     var active: Tab? { tabs.first { $0.id == activeID } }
 
     private func sync() {
         // Keep tabs[] ordered to match state.tabIDs, and publish activeID.
-        let byID = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
-        tabs = state.tabIDs.compactMap { byID[$0] }
+        // This is the ONLY place that assigns `tabs`.
+        tabs = state.tabIDs.compactMap { tabsByID[$0] }
         activeID = state.activeID
     }
 
     @discardableResult
     func newTab(configuration: WKWebViewConfiguration = WKWebViewConfiguration(), url: URL? = nil) -> Tab {
         let tab = Tab(configuration: configuration)
-        tabs.append(tab)             // add the instance before state.sync reorders
+        tabsByID[tab.id] = tab
         state.add(tab.id)
         sync()
         if let url { tab.load(url) }
@@ -31,9 +35,9 @@ final class TabsModel: ObservableObject {
 
     func close(_ id: UUID) {
         state.close(id)
-        tabs.removeAll { $0.id == id }
+        tabsByID[id] = nil
         sync()
-        if tabs.isEmpty { newTab() }   // start page (no URL)
+        if state.tabIDs.isEmpty { newTab() }   // start page (no URL)
     }
 
     func select(_ id: UUID) {

@@ -9,7 +9,23 @@ struct MiniBrowserApp: App {
         DispatchQueue.main.async {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate()
-            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+            // G1: the window may not exist yet on first launch. Guard + bounded retry
+            // on the next main-runloop turn (no infinite loop).
+            Self.bringWindowToFront(attemptsRemaining: 10)
+        }
+    }
+
+    /// Brings the first window to the front, retrying on subsequent main-runloop turns
+    /// until a window exists or the bounded attempt budget is exhausted.
+    @MainActor
+    private static func bringWindowToFront(attemptsRemaining: Int) {
+        if let window = NSApp.windows.first {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        guard attemptsRemaining > 0 else { return }
+        DispatchQueue.main.async {
+            bringWindowToFront(attemptsRemaining: attemptsRemaining - 1)
         }
     }
 
