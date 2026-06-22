@@ -6,7 +6,11 @@ struct WebView: NSViewRepresentable {
     /// Called when a navigation finishes, for history recording: (url, title).
     var onCommit: (URL, String) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(onCommit: onCommit) }
+    func makeCoordinator() -> Coordinator {
+        let coordinator = Coordinator(onCommit: onCommit)
+        coordinator.tab = tab
+        return coordinator
+    }
 
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
@@ -16,6 +20,7 @@ struct WebView: NSViewRepresentable {
 
     func updateNSView(_ container: NSView, context: Context) {
         context.coordinator.onCommit = onCommit
+        context.coordinator.tab = tab
         if container.subviews.first !== tab.webView {
             container.subviews.forEach { $0.removeFromSuperview() }
             attach(tab.webView, to: container, coordinator: context.coordinator)
@@ -40,9 +45,11 @@ struct WebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var onCommit: (URL, String) -> Void
+        weak var tab: Tab?
         init(onCommit: @escaping (URL, String) -> Void) { self.onCommit = onCommit }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            tab?.loadError = nil   // clear stale overlay (covers in-page links, goBack/goForward)
             if let url = webView.url {
                 onCommit(url, webView.title ?? "")
             }
@@ -59,6 +66,8 @@ struct WebView: NSViewRepresentable {
         }
         private func report(_ error: Error, on webView: WKWebView) {
             FileHandle.standardError.write(Data("nav failed: \(error)\n".utf8))
+            if (error as NSError).code == NSURLErrorCancelled { return }  // -999: stop()/redirects
+            tab?.loadError = error.localizedDescription
         }
     }
 }
