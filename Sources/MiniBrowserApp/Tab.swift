@@ -21,6 +21,7 @@ final class Tab: ObservableObject, Identifiable {
     init(configuration: WKWebViewConfiguration = WKWebViewConfiguration()) {
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.customUserAgent = MobileUserAgent.iPhoneSafari   // G3: before any load
+        webView.allowsBackForwardNavigationGestures = true       // two-finger swipe = back/forward
         observe()
     }
 
