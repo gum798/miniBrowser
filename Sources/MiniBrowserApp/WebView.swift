@@ -44,6 +44,12 @@ struct WebView: NSViewRepresentable {
             webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
         ])
+
+        let swipe = EdgeSwipeOverlay()   // mouse edge-drag = back/forward (on top of the web view)
+        swipe.tab = coordinator.tab
+        swipe.frame = container.bounds
+        swipe.autoresizingMask = [.width, .height]
+        container.addSubview(swipe)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
