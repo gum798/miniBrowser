@@ -32,8 +32,9 @@ struct MiniBrowserApp: App {
     var body: some Scene {
         WindowGroup {
             BrowserView()
-                .frame(width: 390, height: 844)
+                .frame(minWidth: 320, idealWidth: 390, maxWidth: .infinity,
+                       minHeight: 480, idealHeight: 844, maxHeight: .infinity)
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
     }
 }
