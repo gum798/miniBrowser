@@ -11,3 +11,4 @@ xcuserdata/
 DerivedData/
 *.xcodeproj/xcuserdata/
 *.swp
+dist/
