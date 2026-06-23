@@ -34,6 +34,7 @@ struct MiniBrowserApp: App {
             BrowserView()
                 .frame(minWidth: 320, idealWidth: 390, maxWidth: .infinity,
                        minHeight: 480, idealHeight: 844, maxHeight: .infinity)
+                .preferredColorScheme(.dark)   // default to dark theme
         }
         .windowResizability(.contentMinSize)
     }
