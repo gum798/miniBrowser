@@ -51,7 +51,10 @@ final class ElementHider: NSObject, ObservableObject {
             "s.textContent=\(Self.jsString(css));})();")
     }
 
-    private func startPicking(_ webView: WKWebView) { webView.evaluateJavaScript(Self.pickerOn) }
+    private func startPicking(_ webView: WKWebView) {
+        webView.layer?.setAffineTransform(.identity)   // clear any leftover edge-swipe transform
+        webView.evaluateJavaScript(Self.pickerOn)
+    }
     private func stopPicking(_ webView: WKWebView) { webView.evaluateJavaScript(Self.pickerOff) }
 
     /// Encode a string as a JS/JSON string literal so it embeds safely.

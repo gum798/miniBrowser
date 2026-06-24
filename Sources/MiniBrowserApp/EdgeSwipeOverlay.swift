@@ -28,6 +28,9 @@ final class EdgeSwipeOverlay: NSView {
 
     /// Claim only the active edge zone; everything else falls through to the web view.
     override func hitTest(_ point: NSPoint) -> NSView? {
+        // While picking elements to hide, stay out of the way so every click reaches
+        // the page and uses WebKit's native (accurate) hit-testing.
+        if ElementHider.shared.picking { return nil }
         guard let sv = superview else { return nil }
         let p = convert(point, from: sv)
         if p.x <= edge(), tab?.canGoBack == true { return self }
