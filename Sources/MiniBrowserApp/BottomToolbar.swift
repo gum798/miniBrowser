@@ -20,6 +20,23 @@ struct BottomToolbar: View {
             }
             .disabled(tab.url == nil)
             Spacer()
+            Menu {
+                Button { tab.zoomIn() }  label: { Label("글자 크게", systemImage: "plus.magnifyingglass") }
+                Button { tab.zoomOut() } label: { Label("글자 작게", systemImage: "minus.magnifyingglass") }
+                Button { tab.resetZoom() } label: {
+                    Label("원래 크기 (\(Int(tab.zoom * 100))%)", systemImage: "1.magnifyingglass")
+                }
+                Divider()
+                Button { tab.toggleInvert() } label: {
+                    Label(tab.inverted ? "색 반전 끄기" : "색 반전", systemImage: "circle.righthalf.filled")
+                }
+            } label: {
+                Image(systemName: "textformat.size")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(tab.url == nil)
+            Spacer()
             Button(action: onShowTabs) {
                 Label("\(tabCount)", systemImage: "square.on.square")
             }

@@ -15,6 +15,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published var canGoForward = false
     @Published var isLoading = false
     @Published var loadError: String?
+    @Published var zoom: Double = PageZoom.standard
+    @Published var inverted = false
 
     private var kvo: [NSKeyValueObservation] = []
 
@@ -65,6 +67,35 @@ final class Tab: ObservableObject, Identifiable {
     func goForward() { webView.goForward() }
     func reload() { loadError = nil; webView.reload() }
     func stop() { webView.stopLoading() }
+
+    // Font/page zoom — pageZoom is a property of the web view, so it persists
+    // across navigations automatically; we just track the level for the UI.
+    func zoomIn()    { setZoom(PageZoom.stepped(zoom, by: 1)) }
+    func zoomOut()   { setZoom(PageZoom.stepped(zoom, by: -1)) }
+    func resetZoom() { setZoom(PageZoom.standard) }
+    private func setZoom(_ z: Double) {
+        zoom = z
+        webView.pageZoom = z
+    }
+
+    // Color inversion (dark-mode-ish): inject/remove a CSS filter. Re-applied
+    // after each page load via `applyInvert()` from the navigation delegate.
+    func toggleInvert() {
+        inverted.toggle()
+        applyInvert()
+    }
+    func applyInvert() {
+        webView.evaluateJavaScript(Self.invertScript(inverted))
+    }
+    private static func invertScript(_ on: Bool) -> String {
+        on ? """
+        (function(){var d=document,id='__mb_invert__',s=d.getElementById(id);
+        if(!s){s=d.createElement('style');s.id=id;
+        s.textContent='html{filter:invert(1) hue-rotate(180deg) !important;background:#fafafa !important}'
+        +'img,picture,video,canvas,iframe,svg,[style*=\\"background-image\\"]{filter:invert(1) hue-rotate(180deg) !important}';
+        (d.head||d.documentElement).appendChild(s);}})();
+        """ : "(function(){var s=document.getElementById('__mb_invert__');if(s)s.remove();})();"
+    }
 
     deinit { kvo.forEach { $0.invalidate() } }   // G4: prevent crashes/leaks
 }

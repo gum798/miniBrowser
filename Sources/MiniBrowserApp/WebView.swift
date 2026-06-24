@@ -73,6 +73,7 @@ struct WebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             tab?.loadError = nil   // clear stale overlay (covers in-page links, goBack/goForward)
+            if tab?.inverted == true { tab?.applyInvert() }   // re-apply invert on the new document
             if let url = webView.url {
                 onCommit(url, webView.title ?? "")
             }
