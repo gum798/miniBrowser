@@ -18,6 +18,10 @@ final class Tab: ObservableObject, Identifiable {
     @Published var zoom: Double = PageZoom.standard
     @Published var inverted = false
 
+    /// A restored URL, loaded lazily the first time this tab becomes active
+    /// (so background tabs don't load detached, which loses the load).
+    var pendingURL: URL?
+
     private var kvo: [NSKeyValueObservation] = []
 
     init(configuration: WKWebViewConfiguration = WKWebViewConfiguration()) {
@@ -63,6 +67,22 @@ final class Tab: ObservableObject, Identifiable {
     func load(_ url: URL) {
         loadError = nil
         webView.load(URLRequest(url: url))
+    }
+
+    /// Restore persisted per-tab state (zoom + color inversion). The URL is set
+    /// separately as `pendingURL` and loaded on first activation.
+    func applyRestored(zoom: Double, inverted: Bool) {
+        self.zoom = zoom
+        webView.pageZoom = zoom
+        self.inverted = inverted
+        if inverted { installInvertScript() }
+    }
+
+    /// Load the restored URL the first time the tab is shown.
+    func loadPendingIfNeeded() {
+        guard let pendingURL, url == nil else { return }
+        self.pendingURL = nil
+        load(pendingURL)
     }
     func goBack() { webView.goBack() }
     func goForward() { webView.goForward() }

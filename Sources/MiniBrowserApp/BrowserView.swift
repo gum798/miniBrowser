@@ -28,7 +28,7 @@ struct BrowserView: View {
         }
         .background(WindowReader { boss.attach($0) })   // boss key: shrink when idle
         .onAppear {
-            if model.tabs.isEmpty { model.newTab() }   // start page
+            if model.tabs.isEmpty { model.restore() }   // restore previous session (or start page)
             installZoomKeys()
         }
         .onDisappear {
@@ -109,6 +109,7 @@ private struct TabContentView: View {
                 onShowTabs: onShowTabs
             )
         }
+        .onAppear { tab.loadPendingIfNeeded() }   // load a restored tab's URL when first shown
     }
 
     private func isBookmarked(_ url: URL?) -> Bool {
