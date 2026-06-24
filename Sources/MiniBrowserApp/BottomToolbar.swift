@@ -3,6 +3,7 @@ import SwiftUI
 struct BottomToolbar: View {
     @ObservedObject var tab: Tab
     @ObservedObject var boss: BossMode
+    @ObservedObject private var adBlocker = AdBlocker.shared
     let tabCount: Int
     let isBookmarked: Bool
     let onToggleBookmark: () -> Void
@@ -34,6 +35,10 @@ struct BottomToolbar: View {
                 }
                 .disabled(tab.url == nil)
                 Divider()
+                Button { adBlocker.enabled.toggle() } label: {
+                    Label(adBlocker.enabled ? "광고 차단: 켜짐" : "광고 차단: 꺼짐",
+                          systemImage: adBlocker.enabled ? "hand.raised.fill" : "hand.raised")
+                }
                 Button { boss.enabled.toggle() } label: {
                     Label(boss.enabled ? "자리비움 자동 숨김: 켜짐" : "자리비움 자동 숨김: 꺼짐",
                           systemImage: boss.enabled ? "eye.slash" : "eye")

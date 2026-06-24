@@ -25,6 +25,7 @@ final class Tab: ObservableObject, Identifiable {
         webView.customUserAgent = MobileUserAgent.iPhoneSafari   // G3: before any load
         webView.allowsBackForwardNavigationGestures = true       // two-finger swipe = back/forward
         observe()
+        AdBlocker.shared.register(webView)                       // iPhone-Safari-style ad blocking
     }
 
     private func observe() {
