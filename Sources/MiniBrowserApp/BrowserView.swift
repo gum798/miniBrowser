@@ -1,10 +1,12 @@
 import SwiftUI
+import AppKit
 import MiniBrowserCore
 
 struct BrowserView: View {
     @StateObject private var model = TabsModel()
     @StateObject private var boss = BossMode()
     @State private var showTabs = false
+    @State private var keyMonitor: Any?
     private let historyStore = HistoryStore(directory: AppPaths.supportDirectory())
     private let bookmarkStore = BookmarkStore(directory: AppPaths.supportDirectory())
 
@@ -27,6 +29,29 @@ struct BrowserView: View {
         .background(WindowReader { boss.attach($0) })   // boss key: shrink when idle
         .onAppear {
             if model.tabs.isEmpty { model.newTab() }   // start page
+            installZoomKeys()
+        }
+        .onDisappear {
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            keyMonitor = nil
+        }
+    }
+
+    /// ⌘+ / ⌘= (zoom in), ⌘- (zoom out), ⌘0 (reset) on the active tab's page.
+    /// A local key monitor is used (instead of SwiftUI shortcuts/commands) so it
+    /// fires regardless of focus or menu state, even while the web view is first
+    /// responder.
+    private func installZoomKeys() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.contains(.command),
+                  let tab = model.active, tab.url != nil else { return event }
+            switch event.charactersIgnoringModifiers {
+            case "=", "+": tab.zoomIn();    return nil
+            case "-":      tab.zoomOut();   return nil
+            case "0":      tab.resetZoom(); return nil
+            default:       return event
+            }
         }
     }
 }
