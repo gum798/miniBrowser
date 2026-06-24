@@ -3,6 +3,7 @@ import MiniBrowserCore
 
 struct BrowserView: View {
     @StateObject private var model = TabsModel()
+    @StateObject private var boss = BossMode()
     @State private var showTabs = false
     private let historyStore = HistoryStore(directory: AppPaths.supportDirectory())
     private let bookmarkStore = BookmarkStore(directory: AppPaths.supportDirectory())
@@ -17,11 +18,13 @@ struct BrowserView: View {
                     model: model,
                     historyStore: historyStore,
                     bookmarkStore: bookmarkStore,
+                    boss: boss,
                     onShowTabs: { showTabs = true }
                 )
                 .id(tab.id)   // rebind chrome when the active tab changes; web view persists in the model
             }
         }
+        .background(WindowReader { boss.attach($0) })   // boss key: shrink when idle
         .onAppear {
             if model.tabs.isEmpty { model.newTab() }   // start page
         }
@@ -38,6 +41,7 @@ private struct TabContentView: View {
     let model: TabsModel
     let historyStore: HistoryStore
     let bookmarkStore: BookmarkStore
+    let boss: BossMode
     let onShowTabs: () -> Void
 
     @State private var bookmarkTick = 0   // bump to refresh bookmark-derived views
@@ -73,6 +77,7 @@ private struct TabContentView: View {
             Divider()
             BottomToolbar(
                 tab: tab,
+                boss: boss,
                 tabCount: model.tabs.count,
                 isBookmarked: isBookmarked(tab.url),
                 onToggleBookmark: { toggleBookmark(tab) },

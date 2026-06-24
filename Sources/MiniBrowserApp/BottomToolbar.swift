@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BottomToolbar: View {
     @ObservedObject var tab: Tab
+    @ObservedObject var boss: BossMode
     let tabCount: Int
     let isBookmarked: Bool
     let onToggleBookmark: () -> Void
@@ -26,16 +27,22 @@ struct BottomToolbar: View {
                 Button { tab.resetZoom() } label: {
                     Label("원래 크기 (\(Int(tab.zoom * 100))%)", systemImage: "1.magnifyingglass")
                 }
+                .disabled(tab.url == nil)
                 Divider()
                 Button { tab.toggleInvert() } label: {
                     Label(tab.inverted ? "색 반전 끄기" : "색 반전", systemImage: "circle.righthalf.filled")
+                }
+                .disabled(tab.url == nil)
+                Divider()
+                Button { boss.enabled.toggle() } label: {
+                    Label(boss.enabled ? "자리비움 자동 숨김: 켜짐" : "자리비움 자동 숨김: 꺼짐",
+                          systemImage: boss.enabled ? "eye.slash" : "eye")
                 }
             } label: {
                 Image(systemName: "textformat.size")
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .disabled(tab.url == nil)
             Spacer()
             Button(action: onShowTabs) {
                 Label("\(tabCount)", systemImage: "square.on.square")
