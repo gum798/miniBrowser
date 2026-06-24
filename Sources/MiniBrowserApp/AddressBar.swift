@@ -5,8 +5,8 @@ struct AddressBar: View {
     @ObservedObject var tab: Tab
     let historyStore: HistoryStore
     let onSubmit: (URL) -> Void
+    @Binding var text: String   // lifted so the start page can filter on what's typed
 
-    @State private var text: String = ""
     @State private var editing = false
     @State private var suggestions: [HistoryEntry] = []
 

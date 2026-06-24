@@ -5,6 +5,8 @@ import MiniBrowserCore
 struct StartPageView: View {
     let bookmarks: [Bookmark]
     let recent: [HistoryEntry]
+    /// Live filter from the address bar — empty shows everything.
+    var query: String = ""
     let onOpen: (URL) -> Void
 
     /// Safari bookmarks, read live every time the start page appears.
@@ -13,22 +15,23 @@ struct StartPageView: View {
     private let columns = [GridItem(.adaptive(minimum: 84), spacing: 16)]
 
     var body: some View {
+        let favorites = filter(bookmarks, \.title, \.url)
+        let recents = filter(recent, \.title, \.url)
+        let safariItems = filterSafari()
+
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if !bookmarks.isEmpty {
+                if !favorites.isEmpty {
                     Text("즐겨찾기").font(.headline).padding(.horizontal)
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(bookmarks) { tile($0) }
-                    }
-                    .padding(.horizontal)
+                    grid(favorites)
                 }
 
-                safariSection
+                safariSection(safariItems)
 
-                if !recent.isEmpty {
+                if !recents.isEmpty {
                     Text("최근 방문").font(.headline).padding(.horizontal)
                     VStack(spacing: 0) {
-                        ForEach(recent) { entry in
+                        ForEach(recents) { entry in
                             Button { onOpen(entry.url) } label: {
                                 HStack {
                                     Text(entry.title.isEmpty ? entry.url.absoluteString : entry.title)
@@ -43,30 +46,41 @@ struct StartPageView: View {
                         }
                     }
                 }
+
+                if isSearching && favorites.isEmpty && safariItems.isEmpty && recents.isEmpty {
+                    Text("‘\(query.trimmingCharacters(in: .whitespacesAndNewlines))’ 검색 결과가 없습니다")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                }
             }
             .padding(.vertical)
         }
         .onAppear(perform: reloadSafari)
     }
 
-    @ViewBuilder private var safariSection: some View {
+    @ViewBuilder private func safariSection(_ items: [Bookmark]) -> some View {
         switch safari {
-        case .ok(let items) where !items.isEmpty:
+        case .ok where !items.isEmpty:
             HStack {
                 Text("Safari 북마크").font(.headline)
                 Spacer()
                 Text("\(items.count)").font(.caption).foregroundStyle(.secondary)
             }
             .padding(.horizontal)
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(items, id: \.url) { tile($0) }
-            }
-            .padding(.horizontal)
-        case .denied:
+            grid(items)
+        case .denied where !isSearching:
             permissionCard
         default:
             EmptyView()
         }
+    }
+
+    private func grid(_ items: [Bookmark]) -> some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(items, id: \.url) { tile($0) }
+        }
+        .padding(.horizontal)
     }
 
     private var permissionCard: some View {
@@ -97,6 +111,19 @@ struct StartPageView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func filter<T>(_ items: [T], _ title: KeyPath<T, String>, _ url: KeyPath<T, URL>) -> [T] {
+        items.filter { TextSearch.matches(query, anyOf: [$0[keyPath: title], $0[keyPath: url].absoluteString]) }
+    }
+
+    private func filterSafari() -> [Bookmark] {
+        guard case .ok(let items) = safari else { return [] }
+        return filter(items, \.title, \.url)
     }
 
     private func reloadSafari() {

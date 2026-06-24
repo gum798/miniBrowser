@@ -41,16 +41,18 @@ private struct TabContentView: View {
     let onShowTabs: () -> Void
 
     @State private var bookmarkTick = 0   // bump to refresh bookmark-derived views
+    @State private var addressText = ""   // what's typed in the address bar (= start-page filter)
 
     var body: some View {
         VStack(spacing: 0) {
-            AddressBar(tab: tab, historyStore: historyStore, onSubmit: { tab.load($0) })
+            AddressBar(tab: tab, historyStore: historyStore, onSubmit: { tab.load($0) }, text: $addressText)
             Divider()
             ZStack {
                 if tab.url == nil {
                     StartPageView(
                         bookmarks: bookmarkStore.all(),
                         recent: historyStore.recent(limit: 12),
+                        query: addressText,
                         onOpen: { tab.load($0) }
                     )
                     .id(bookmarkTick)
