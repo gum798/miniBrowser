@@ -21,7 +21,7 @@ final class EdgeSwipeOverlay: NSView {
     private var offset: CGFloat = 0
 
     private let longPress: TimeInterval = 0.35
-    private func edge() -> CGFloat { max(100, bounds.width / 3) }
+    private func edge() -> CGFloat { max(40, bounds.width * 0.10) }   // narrow back/forward strip
     private func threshold() -> CGFloat { max(60, bounds.width * 0.22) }
 
     override var isFlipped: Bool { true }   // top-left origin, matches web/page coords
