@@ -37,7 +37,7 @@ struct BottomToolbar: View {
                 .disabled(tab.url == nil)
                 Divider()
                 Button { hider.picking.toggle() } label: {
-                    Label(hider.picking ? "방해 요소 가리기: 켜짐 (요소를 클릭해 숨기기)" : "방해 요소 가리기",
+                    Label(hider.picking ? "방해 요소 가리기: 켜짐 (요소 하나 클릭)" : "방해 요소 가리기",
                           systemImage: hider.picking ? "eye.slash.circle.fill" : "eye.slash.circle")
                 }
                 Button { hider.resetCurrentHost(of: tab.webView) } label: {

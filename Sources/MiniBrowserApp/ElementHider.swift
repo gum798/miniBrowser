@@ -112,6 +112,9 @@ extension ElementHider: WKScriptMessageHandler {
               let body = message.body as? [String: Any],
               let selector = body["selector"] as? String,
               let host = body["host"] as? String else { return }
-        Task { @MainActor in self.store.add(selector, host: host) }
+        Task { @MainActor in
+            self.store.add(selector, host: host)
+            self.picking = false   // hide one element, then exit picker mode
+        }
     }
 }
