@@ -82,7 +82,18 @@ final class Tab: ObservableObject, Identifiable {
     // after each page load via `applyInvert()` from the navigation delegate.
     func toggleInvert() {
         inverted.toggle()
-        applyInvert()
+        installInvertScript()   // applies to every future load, from the first paint
+        applyInvert()           // and to the page already on screen
+    }
+    /// Inject the invert style at document start so the page stays inverted
+    /// throughout loading and across navigations (no flash of original colors).
+    private func installInvertScript() {
+        let ucc = webView.configuration.userContentController
+        ucc.removeAllUserScripts()
+        guard inverted else { return }
+        ucc.addUserScript(WKUserScript(source: Self.invertScript(true),
+                                       injectionTime: .atDocumentStart,
+                                       forMainFrameOnly: true))
     }
     func applyInvert() {
         webView.evaluateJavaScript(Self.invertScript(inverted))
