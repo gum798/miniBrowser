@@ -1,10 +1,14 @@
 import SwiftUI
+import AppKit
 import MiniBrowserCore
 
 struct StartPageView: View {
     let bookmarks: [Bookmark]
     let recent: [HistoryEntry]
     let onOpen: (URL) -> Void
+
+    /// Safari bookmarks, read live every time the start page appears.
+    @State private var safari: SafariBookmarks.Access = .unavailable
 
     private let columns = [GridItem(.adaptive(minimum: 84), spacing: 16)]
 
@@ -14,21 +18,12 @@ struct StartPageView: View {
                 if !bookmarks.isEmpty {
                     Text("즐겨찾기").font(.headline).padding(.horizontal)
                     LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(bookmarks) { b in
-                            Button { onOpen(b.url) } label: {
-                                VStack(spacing: 6) {
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(.quaternary)
-                                        .frame(width: 56, height: 56)
-                                        .overlay(Text(initials(b.title)).font(.title3.bold()))
-                                    Text(b.title).font(.caption2).lineLimit(1)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        ForEach(bookmarks) { tile($0) }
                     }
                     .padding(.horizontal)
                 }
+
+                safariSection
 
                 if !recent.isEmpty {
                     Text("최근 방문").font(.headline).padding(.horizontal)
@@ -50,6 +45,64 @@ struct StartPageView: View {
                 }
             }
             .padding(.vertical)
+        }
+        .onAppear(perform: reloadSafari)
+    }
+
+    @ViewBuilder private var safariSection: some View {
+        switch safari {
+        case .ok(let items) where !items.isEmpty:
+            HStack {
+                Text("Safari 북마크").font(.headline)
+                Spacer()
+                Text("\(items.count)").font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal)
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(items, id: \.url) { tile($0) }
+            }
+            .padding(.horizontal)
+        case .denied:
+            permissionCard
+        default:
+            EmptyView()
+        }
+    }
+
+    private var permissionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Safari 북마크").font(.headline)
+            Text("Safari 북마크를 보려면 ‘전체 디스크 접근’ 권한이 필요합니다. 시스템 설정에서 miniBrowser를 켜고 앱을 다시 실행하세요.")
+                .font(.callout).foregroundStyle(.secondary)
+            Button("시스템 설정 열기") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(.quaternary))
+        .padding(.horizontal)
+    }
+
+    private func tile(_ b: Bookmark) -> some View {
+        Button { onOpen(b.url) } label: {
+            VStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.quaternary)
+                    .frame(width: 56, height: 56)
+                    .overlay(Text(initials(b.title)).font(.title3.bold()))
+                Text(b.title).font(.caption2).lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func reloadSafari() {
+        Task.detached(priority: .userInitiated) {
+            let result = SafariBookmarks.read()
+            await MainActor.run { safari = result }
         }
     }
 

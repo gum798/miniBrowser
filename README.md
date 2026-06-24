@@ -31,6 +31,7 @@ swift test               # 코어 유닛 테스트 (MiniBrowserCore)
 - 관성(momentum) 터치 스크롤 (WKWebView 기본)
 - 탭 (아이폰풍 탭 스위처, `target=_blank`/`window.open` → 새 탭)
 - 즐겨찾기 + 새 탭 시작화면(즐겨찾기 그리드 + 최근 방문)
+- **Safari 북마크 실시간 표시** — 시작화면이 열릴 때마다 `~/Library/Safari/Bookmarks.plist`를 읽어 보여줌(가져오기·동기화 단계 없음). 폴더는 평면화하고 중복 URL은 제외. macOS의 **전체 디스크 접근(Full Disk Access)** 권한을 앱에 부여해야 보이며, 권한이 없으면 시작화면에 안내 카드가 표시됩니다.
 - 방문 기록(History) + 주소창 자동완성
 - 페이지 로드 실패 시 인라인 에러 + 재시도
 
