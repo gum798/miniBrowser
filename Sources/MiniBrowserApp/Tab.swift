@@ -30,6 +30,7 @@ final class Tab: ObservableObject, Identifiable {
         webView.allowsBackForwardNavigationGestures = true       // two-finger swipe = back/forward
         observe()
         AdBlocker.shared.register(webView)                       // iPhone-Safari-style ad blocking
+        ElementHider.shared.register(webView)                    // user-picked "방해 요소 가리기"
     }
 
     private func observe() {
