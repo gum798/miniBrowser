@@ -87,7 +87,7 @@ struct WebView: NSViewRepresentable {
         }
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             FileHandle.standardError.write(Data("WebContent process terminated — reloading (G2)\n".utf8))
-            webView.reload()
+            webView.reloadFromOrigin()   // re-fetch fresh so encoding/state is re-derived, not restored stale
         }
         private func report(_ error: Error, on webView: WKWebView) {
             FileHandle.standardError.write(Data("nav failed: \(error)\n".utf8))

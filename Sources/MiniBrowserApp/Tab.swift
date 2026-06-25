@@ -87,7 +87,9 @@ final class Tab: ObservableObject, Identifiable {
     }
     func goBack() { webView.goBack() }
     func goForward() { webView.goForward() }
-    func reload() { loadError = nil; webView.reload() }
+    // Hard reload (re-fetch from origin, not cache) so a long-lived web view that
+    // got into a bad text-decoding state recovers instead of re-rendering it stale.
+    func reload() { loadError = nil; webView.reloadFromOrigin() }
     func stop() { webView.stopLoading() }
 
     // Font/page zoom — pageZoom is a property of the web view, so it persists
