@@ -45,6 +45,11 @@ struct BottomToolbar: View {
                 }
                 .disabled(tab.url == nil)
                 Divider()
+                Button { tab.hardReset() } label: {
+                    Label("페이지 강제 리셋 (글자 깨짐 복구)", systemImage: "arrow.clockwise.circle")
+                }
+                .disabled(tab.url == nil)
+                Divider()
                 Button { adBlocker.enabled.toggle() } label: {
                     Label(adBlocker.enabled ? "광고 차단: 켜짐" : "광고 차단: 꺼짐",
                           systemImage: adBlocker.enabled ? "hand.raised.fill" : "hand.raised")

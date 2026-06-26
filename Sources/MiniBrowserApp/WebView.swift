@@ -26,6 +26,7 @@ struct WebView: NSViewRepresentable {
         if container.subviews.first !== tab.webView {
             container.subviews.forEach { $0.removeFromSuperview() }
             attach(tab.webView, to: container, coordinator: context.coordinator)
+            tab.reattachLoad()   // load the URL on a freshly recreated web view (hardReset)
         }
     }
 
@@ -75,6 +76,13 @@ struct WebView: NSViewRepresentable {
             tab?.loadError = nil   // clear stale overlay (covers in-page links, goBack/goForward)
             if tab?.inverted == true { tab?.applyInvert() }   // re-apply invert on the new document
             ElementHider.shared.onPageLoaded(webView)         // re-hide remembered elements / re-arm picker
+            // Detect mojibake (e.g. EUC-KR decoded wrong) and auto-recover by recreating the web view.
+            webView.evaluateJavaScript(
+                "(function(){var t=(document.body&&document.body.innerText)||'';if(t.length<200)return 0;" +
+                "var n=0;for(var i=0;i<t.length;i++){if(t.charCodeAt(i)===65533)n++;}return n/t.length;})()"
+            ) { [weak tab] result, _ in
+                if let ratio = result as? Double { tab?.handleLoaded(garbleRatio: ratio) }
+            }
             if let url = webView.url {
                 onCommit(url, webView.title ?? "")
             }

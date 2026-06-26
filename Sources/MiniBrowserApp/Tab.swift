@@ -6,7 +6,7 @@ import MiniBrowserCore
 @MainActor
 final class Tab: ObservableObject, Identifiable {
     let id = UUID()
-    let webView: WKWebView
+    private(set) var webView: WKWebView   // recreated by hardReset()
 
     @Published var title: String = ""
     @Published var url: URL?
@@ -25,13 +25,20 @@ final class Tab: ObservableObject, Identifiable {
     private var kvo: [NSKeyValueObservation] = []
 
     init(configuration: WKWebViewConfiguration = WKWebViewConfiguration()) {
-        webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = MobileUserAgent.iPhoneSafari   // G3: before any load
-        webView.allowsBackForwardNavigationGestures = true       // two-finger swipe = back/forward
+        webView = Self.makeWebView(configuration)
         observe()
         AdBlocker.shared.register(webView)                       // iPhone-Safari-style ad blocking
         ElementHider.shared.register(webView)                    // user-picked "방해 요소 가리기"
     }
+
+    private static func makeWebView(_ configuration: WKWebViewConfiguration) -> WKWebView {
+        let wv = WKWebView(frame: .zero, configuration: configuration)
+        wv.customUserAgent = MobileUserAgent.iPhoneSafari   // G3: before any load
+        wv.allowsBackForwardNavigationGestures = true       // two-finger swipe = back/forward
+        return wv
+    }
+
+    private var resetGuard = false   // prevents auto-reset loops
 
     private func observe() {
         // KVO for continuous/derived state -> @Published. WKWebView KVO fires
@@ -91,6 +98,44 @@ final class Tab: ObservableObject, Identifiable {
     // got into a bad text-decoding state recovers instead of re-rendering it stale.
     func reload() { loadError = nil; webView.reloadFromOrigin() }
     func stop() { webView.stopLoading() }
+
+    /// Recreate the web view from scratch (a fresh WebContent process) to recover
+    /// a tab stuck in a bad text-decoding state (EUC-KR shown as mojibake). Keeps
+    /// zoom/inversion and reloads the current page; back/forward history is reset.
+    func hardReset() {
+        let target = webView.url ?? pendingURL
+        kvo.forEach { $0.invalidate() }; kvo = []
+        webView = Self.makeWebView(WKWebViewConfiguration())
+        observe()
+        AdBlocker.shared.register(webView)
+        ElementHider.shared.register(webView)
+        webView.pageZoom = zoom
+        if inverted { installInvertScript() }
+        pendingURL = target           // loaded by reattachLoad() once the new view attaches
+        objectWillChange.send()       // swap the new web view into the view hierarchy
+    }
+
+    /// Load the pending URL on a web view that was just (re)attached — used after
+    /// hardReset() so the load happens once the new view is in the hierarchy.
+    func reattachLoad() {
+        guard let pendingURL else { return }
+        self.pendingURL = nil
+        // Load on the next runloop turn: a web view loaded synchronously right after
+        // being attached doesn't render (its content process isn't mounted yet).
+        DispatchQueue.main.async { [weak self] in self?.load(pendingURL) }
+    }
+
+    /// After each load, the fraction of replacement chars (□, mojibake). Auto
+    /// hard-resets once if the page came out garbled; if it's still bad we stop.
+    func handleLoaded(garbleRatio: Double) {
+        if garbleRatio > 0.1 {
+            guard !resetGuard else { return }
+            resetGuard = true
+            hardReset()
+        } else {
+            resetGuard = false
+        }
+    }
 
     // Font/page zoom — pageZoom is a property of the web view, so it persists
     // across navigations automatically; we just track the level for the UI.
