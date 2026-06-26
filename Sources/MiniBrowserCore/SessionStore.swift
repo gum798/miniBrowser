@@ -1,15 +1,26 @@
 import Foundation
 
-/// A single restored tab: its URL (nil = start page) plus its zoom and
-/// color-inversion state.
+/// A single restored tab: its URL (nil = start page), the page title, plus its
+/// zoom and color-inversion state.
 public struct TabSnapshot: Codable, Equatable, Sendable {
     public var url: URL?
+    public var title: String
     public var zoom: Double
     public var inverted: Bool
-    public init(url: URL?, zoom: Double, inverted: Bool) {
+    public init(url: URL?, title: String, zoom: Double, inverted: Bool) {
         self.url = url
+        self.title = title
         self.zoom = zoom
         self.inverted = inverted
+    }
+
+    private enum CodingKeys: String, CodingKey { case url, title, zoom, inverted }
+    public init(from decoder: Decoder) throws {   // title tolerant of older files
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        url = try c.decodeIfPresent(URL.self, forKey: .url)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        zoom = try c.decode(Double.self, forKey: .zoom)
+        inverted = try c.decode(Bool.self, forKey: .inverted)
     }
 }
 

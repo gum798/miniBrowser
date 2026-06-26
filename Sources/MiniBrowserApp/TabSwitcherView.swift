@@ -47,7 +47,7 @@ private struct TabCard: View {
                 Button(action: onClose) { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain)
             }
-            Text(tab.url?.host() ?? "").lineLimit(1).font(.caption2).foregroundStyle(.secondary)
+            Text((tab.url ?? tab.pendingURL)?.host() ?? "").lineLimit(1).font(.caption2).foregroundStyle(.secondary)
         }
         .padding(8)
         .frame(height: 80, alignment: .topLeading)

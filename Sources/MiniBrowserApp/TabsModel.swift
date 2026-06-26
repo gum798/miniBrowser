@@ -73,6 +73,7 @@ final class TabsModel: ObservableObject {
         for snap in session.tabs {
             let tab = Tab()
             tab.applyRestored(zoom: snap.zoom, inverted: snap.inverted)
+            tab.title = snap.title         // show the saved name before the tab loads
             tab.pendingURL = snap.url
             register(tab)
             state.add(tab.id)
@@ -85,9 +86,10 @@ final class TabsModel: ObservableObject {
 
     private func register(_ tab: Tab) {
         tabsByID[tab.id] = tab
-        // Persist (debounced) whenever a tab's URL, zoom, or inversion changes.
-        cancellables[tab.id] = Publishers.Merge3(
+        // Persist (debounced) whenever a tab's URL, title, zoom, or inversion changes.
+        cancellables[tab.id] = Publishers.Merge4(
             tab.$url.map { _ in () },
+            tab.$title.map { _ in () },
             tab.$zoom.map { _ in () },
             tab.$inverted.map { _ in () }
         )
@@ -97,7 +99,7 @@ final class TabsModel: ObservableObject {
 
     private func persist() {
         let snaps = tabs.map {
-            TabSnapshot(url: $0.url ?? $0.pendingURL, zoom: $0.zoom, inverted: $0.inverted)
+            TabSnapshot(url: $0.url ?? $0.pendingURL, title: $0.title, zoom: $0.zoom, inverted: $0.inverted)
         }
         let activeIndex = activeID.flatMap { id in tabs.firstIndex { $0.id == id } }
         sessionStore.save(Session(tabs: snaps, activeIndex: activeIndex))
