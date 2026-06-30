@@ -96,7 +96,9 @@ private struct TabContentView: View {
                         Text(error).font(.caption).foregroundStyle(.secondary)
                         Button("재시도", action: tab.reload)
                     }
-                    .padding().background(.background)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.background)   // cover the web view so garbage never shows behind the card
                 }
             }
             Divider()

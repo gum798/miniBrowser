@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import MiniBrowserCore
 
 struct WebView: NSViewRepresentable {
     @ObservedObject var tab: Tab
@@ -76,12 +77,23 @@ struct WebView: NSViewRepresentable {
             tab?.loadError = nil   // clear stale overlay (covers in-page links, goBack/goForward)
             if tab?.inverted == true { tab?.applyInvert() }   // re-apply invert on the new document
             ElementHider.shared.onPageLoaded(webView)         // re-hide remembered elements / re-arm picker
-            // Detect mojibake (e.g. EUC-KR decoded wrong) and auto-recover by recreating the web view.
+            // Detect garbage (EUC-KR mojibake, or a raw HTTP response shown as text after
+            // a connection desync) and auto-recover. The probe returns the replacement-char
+            // ratio, whether any are present, and a prefix of the body for signature checks.
             webView.evaluateJavaScript(
-                "(function(){var t=(document.body&&document.body.innerText)||'';if(t.length<200)return 0;" +
-                "var n=0;for(var i=0;i<t.length;i++){if(t.charCodeAt(i)===65533)n++;}return n/t.length;})()"
+                "(function(){var t=(document.body&&document.body.innerText)||'';" +
+                "if(t.length<200)return JSON.stringify({ratio:0,repl:false,head:''});" +
+                "var n=0;for(var i=0;i<t.length;i++){if(t.charCodeAt(i)===65533)n++;}" +
+                "return JSON.stringify({ratio:n/t.length,repl:n>0,head:t.slice(0,400)});})()"
             ) { [weak tab] result, _ in
-                if let ratio = result as? Double { tab?.handleLoaded(garbleRatio: ratio) }
+                guard let json = result as? String, let data = json.data(using: .utf8),
+                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else { return }
+                let garbled = PageGarble.isGarbled(
+                    replacementRatio: obj["ratio"] as? Double ?? 0,
+                    hasReplacementChar: obj["repl"] as? Bool ?? false,
+                    bodyPrefix: obj["head"] as? String ?? "")
+                tab?.handleLoaded(garbled: garbled)
             }
             if let url = webView.url {
                 onCommit(url, webView.title ?? "")

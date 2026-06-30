@@ -38,7 +38,9 @@ final class Tab: ObservableObject, Identifiable {
         return wv
     }
 
-    private var resetGuard = false   // prevents auto-reset loops
+    private var recoverAttempts = 0          // bounds auto-recovery so we never loop forever
+    private var reattachDelay: Double = 0    // delay before reattachLoad() fires (recovery uses one)
+    private static let maxRecoverAttempts = 2
 
     private func observe() {
         // KVO for continuous/derived state -> @Published. WKWebView KVO fires
@@ -96,14 +98,39 @@ final class Tab: ObservableObject, Identifiable {
     func goForward() { webView.goForward() }
     // Hard reload (re-fetch from origin, not cache) so a long-lived web view that
     // got into a bad text-decoding state recovers instead of re-rendering it stale.
-    func reload() { loadError = nil; webView.reloadFromOrigin() }
+    // Re-arms auto-recovery so a manual retry restarts the whole budget.
+    func reload() { loadError = nil; recoverAttempts = 0; webView.reloadFromOrigin() }
     func stop() { webView.stopLoading() }
 
-    /// Recreate the web view from scratch (a fresh WebContent process) to recover
-    /// a tab stuck in a bad text-decoding state (EUC-KR shown as mojibake). Keeps
-    /// zoom/inversion and reloads the current page; back/forward history is reset.
+    /// Manual "강제 리셋": clear caches + rebuild the web view, and re-arm the
+    /// auto-recovery budget so the user's deliberate retry starts fresh.
     func hardReset() {
+        recoverAttempts = 0
+        loadError = nil
+        recover()
+    }
+
+    /// Recover a tab showing garbage (EUC-KR mojibake, or a raw HTTP response left
+    /// over from a keep-alive connection desync). Clears the HTTP caches — keeping
+    /// cookies/login — then recreates the web view (a fresh WebContent process) and
+    /// reloads after a short delay so WebKit drops the poisoned pooled connection.
+    private func recover() {
         let target = webView.url ?? pendingURL
+        let store = webView.configuration.websiteDataStore
+        let cacheTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache,
+        ]
+        store.removeData(ofTypes: cacheTypes, modifiedSince: .distantPast) {
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated { self?.rebuildWebView(loading: target, afterDelay: 1.2) }
+            }
+        }
+    }
+
+    /// Swap in a brand-new web view, preserving zoom/inversion; back/forward history
+    /// is reset. The load is deferred (see `reattachLoad`) so it happens once the new
+    /// view is mounted; `delay` additionally lets a wedged connection age out.
+    private func rebuildWebView(loading target: URL?, afterDelay delay: Double) {
         kvo.forEach { $0.invalidate() }; kvo = []
         webView = Self.makeWebView(WKWebViewConfiguration())
         observe()
@@ -112,29 +139,33 @@ final class Tab: ObservableObject, Identifiable {
         webView.pageZoom = zoom
         if inverted { installInvertScript() }
         pendingURL = target           // loaded by reattachLoad() once the new view attaches
+        reattachDelay = delay
         objectWillChange.send()       // swap the new web view into the view hierarchy
     }
 
-    /// Load the pending URL on a web view that was just (re)attached — used after
-    /// hardReset() so the load happens once the new view is in the hierarchy.
+    /// Load the pending URL on a web view that was just (re)attached — used after a
+    /// rebuild so the load happens once the new view is in the hierarchy.
     func reattachLoad() {
         guard let pendingURL else { return }
         self.pendingURL = nil
-        // Load on the next runloop turn: a web view loaded synchronously right after
-        // being attached doesn't render (its content process isn't mounted yet).
-        DispatchQueue.main.async { [weak self] in self?.load(pendingURL) }
+        let delay = reattachDelay; reattachDelay = 0
+        // Defer at least to the next runloop turn: a web view loaded synchronously
+        // right after being attached doesn't render (its content process isn't mounted
+        // yet). Recovery passes a larger delay to also drop the bad pooled connection.
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.load(pendingURL) }
     }
 
-    /// After each load, the fraction of replacement chars (□, mojibake). Auto
-    /// hard-resets once if the page came out garbled; if it's still bad we stop.
-    func handleLoaded(garbleRatio: Double) {
-        if garbleRatio > 0.1 {
-            guard !resetGuard else { return }
-            resetGuard = true
-            hardReset()
-        } else {
-            resetGuard = false
+    /// After each load, whether the page came out garbled (mojibake or a raw HTTP
+    /// response shown as text). Auto-recovers up to `maxRecoverAttempts` times; if it's
+    /// still bad we stop guessing and show a retry overlay instead of leaving garbage.
+    func handleLoaded(garbled: Bool) {
+        guard garbled else { recoverAttempts = 0; loadError = nil; return }
+        guard recoverAttempts < Self.maxRecoverAttempts else {
+            loadError = "페이지가 깨져서 표시됐어요. 다시 시도해 주세요."
+            return
         }
+        recoverAttempts += 1
+        recover()
     }
 
     // Font/page zoom — pageZoom is a property of the web view, so it persists
