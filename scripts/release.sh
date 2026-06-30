@@ -32,7 +32,7 @@ echo "  sha256  $SHA"
 echo "✓ updated $CASK"
 
 if [[ "${2:-}" == "--publish" ]]; then
-  echo "› Publishing GitHub release v$VERSION…"
+  echo "› Publishing GitHub release v${VERSION}"
   gh release create "v$VERSION" "$ZIP" \
     --title "miniBrowser $VERSION" \
     --notes "Install: \`brew install --cask https://raw.githubusercontent.com/gum798/miniBrowser/main/Casks/minibrowser.rb\`"
