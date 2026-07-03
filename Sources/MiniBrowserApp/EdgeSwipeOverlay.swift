@@ -71,7 +71,12 @@ final class EdgeSwipeOverlay: NSView {
         let dx = convert(event.locationInWindow, from: nil).x - downPoint.x
         if swiping {
             if (fromLeft ? dx : -dx) >= threshold() {
-                setOffset(0)                 // reset before the view goes on the stack
+                // With a live peek beneath, leave the page where the drag ended: the
+                // swap replaces it with the (already fully visible) revealed page in
+                // the same frame — resetting first would flash the old page back over
+                // it. Without a peek (native history / placeholder) the view stays,
+                // so the transform must be reset.
+                if peek == nil { setOffset(0) }
                 if fromLeft { tab?.goBack() } else { tab?.goForward() }
                 peek = nil                   // the swap re-attaches subviews; nothing to remove
             } else {
@@ -91,6 +96,7 @@ final class EdgeSwipeOverlay: NSView {
               let target = tab?.peekView(back: fromLeft) else { return }
         target.frame = container.bounds
         target.autoresizingMask = [.width, .height]
+        target.layer?.setAffineTransform(.identity)   // clear any stale swipe transform
         container.addSubview(target, positioned: .below, relativeTo: current)
         peek = target
     }

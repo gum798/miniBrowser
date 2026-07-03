@@ -69,8 +69,12 @@ final class TwoFingerSwipe {
             return nil
         case .ended, .cancelled:
             guard mode == .navigating else { mode = .idle; return event }
-            setOffset(0, on: webView)                          // reset before any stack swap
-            if (goingBack ? accumX : -accumX) >= threshold {
+            let commit = (goingBack ? accumX : -accumX) >= threshold
+            // Leave the page translated when a live peek will be swapped in — the
+            // revealed page is already fully visible beneath; resetting first would
+            // flash the old page back over it for a frame.
+            if peek == nil || !commit { setOffset(0, on: webView) }
+            if commit {
                 if goingBack { tab.goBack() } else { tab.goForward() }
                 peek = nil                                     // swap re-attaches subviews
             } else {
@@ -99,6 +103,7 @@ final class TwoFingerSwipe {
               let target = tab.peekView(back: goingBack) else { return }
         target.frame = container.bounds
         target.autoresizingMask = [.width, .height]
+        target.layer?.setAffineTransform(.identity)   // clear any stale swipe transform
         container.addSubview(target, positioned: .below, relativeTo: webView)
         peek = target
     }

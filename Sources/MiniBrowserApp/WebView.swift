@@ -40,6 +40,8 @@ struct WebView: NSViewRepresentable {
         webView.uiDelegate = coordinator
         webView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(webView)
+        // A view coming back from the page stack may carry a stale swipe transform.
+        webView.layer?.setAffineTransform(.identity)
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: container.topAnchor),
             webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
