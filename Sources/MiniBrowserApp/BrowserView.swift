@@ -90,6 +90,10 @@ private struct TabContentView: View {
                     )
                     .id(bookmarkTick)
                 } else {
+                    // NOTE: tearing this down (url back to nil) would orphan the
+                    // delegates of pages still alive on the tab's page stack — they
+                    // self-heal on the next foreground load, but don't blank `url`
+                    // deliberately while a stack exists.
                     WebView(tab: tab, model: model) { url, title in
                         historyStore.record(url: url, title: title)
                     }

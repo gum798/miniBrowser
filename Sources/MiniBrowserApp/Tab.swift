@@ -204,6 +204,10 @@ final class Tab: ObservableObject, Identifiable {
     /// preserved); placeholders get a fresh web view and reload their URL.
     private func show(_ page: StackedPage) {
         loadError = nil
+        // Disarm any deferred load left by pushNewPage(): if a back-navigation lands
+        // before that load's updateNSView pass runs, a stale pendingURL would later
+        // load the wrong URL into the revealed page.
+        pendingURL = nil
         if let live = page.webView {
             adopt(live)
             live.pageZoom = zoom      // zoom/invert may have changed while stacked
