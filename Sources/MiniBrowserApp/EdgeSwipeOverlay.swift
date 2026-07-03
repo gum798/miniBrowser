@@ -19,6 +19,7 @@ final class EdgeSwipeOverlay: NSView {
     private var fromLeft = true
     private var swiping = false
     private var offset: CGFloat = 0
+    private var peek: WKWebView?   // live page shown under the current one while swiping
 
     private let longPress: TimeInterval = 0.35
     private func edge() -> CGFloat { 60 }   // back/forward swipe strip width (pt)
@@ -60,22 +61,44 @@ final class EdgeSwipeOverlay: NSView {
            (fromLeft && dx > 0) || (!fromLeft && dx < 0) {
             swiping = true
         }
-        if swiping { setOffset(fromLeft ? max(0, dx) : min(0, dx)) }
+        if swiping {
+            installPeekIfNeeded()
+            setOffset(fromLeft ? max(0, dx) : min(0, dx))
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
         let dx = convert(event.locationInWindow, from: nil).x - downPoint.x
         if swiping {
             if (fromLeft ? dx : -dx) >= threshold() {
+                setOffset(0)                 // reset before the view goes on the stack
                 if fromLeft { tab?.goBack() } else { tab?.goForward() }
-                setOffset(0)                 // new page renders in place
+                peek = nil                   // the swap re-attaches subviews; nothing to remove
             } else {
                 setOffset(0, animated: true) // snap back
+                removePeek(afterDelay: 0.25) // keep it visible under the snap-back animation
             }
         } else if event.timestamp - downTime >= longPress {
             forwardClick(at: downPoint)       // long press -> real click
         }                                     // quick tap -> swallowed
         swiping = false
+    }
+
+    /// Put the live page the gesture would reveal UNDER the current web view, so
+    /// dragging the page aside uncovers the real screen (book-flip effect).
+    private func installPeekIfNeeded() {
+        guard peek == nil, let container = superview, let current = tab?.webView,
+              let target = tab?.peekView(back: fromLeft) else { return }
+        target.frame = container.bounds
+        target.autoresizingMask = [.width, .height]
+        container.addSubview(target, positioned: .below, relativeTo: current)
+        peek = target
+    }
+
+    private func removePeek(afterDelay delay: TimeInterval) {
+        guard let peek else { return }
+        self.peek = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { peek.removeFromSuperview() }
     }
 
     /// Slide the web view to follow the drag; redraw the chevron hint.
@@ -92,6 +115,7 @@ final class EdgeSwipeOverlay: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        guard peek == nil else { return }
         guard swiping, offset != 0 else { return }
         let reveal = abs(offset)
         let progress = min(1, reveal / threshold())

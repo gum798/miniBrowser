@@ -28,6 +28,11 @@ public struct PageStack<Element> {
     public var canGoBack: Bool { !back.isEmpty }
     public var canGoForward: Bool { !forward.isEmpty }
 
+    /// The entry `goBack()` would reveal next (stack top), without mutating.
+    public var backTop: Element? { back.last }
+    /// The entry `goForward()` would reveal next (stack top), without mutating.
+    public var forwardTop: Element? { forward.last }
+
     /// Navigating to a new page: the current page joins the back stack and the
     /// forward stack is discarded (standard browser semantics). Returns the
     /// discarded forward elements so the caller can tear them down.

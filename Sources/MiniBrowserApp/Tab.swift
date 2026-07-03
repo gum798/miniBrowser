@@ -183,6 +183,19 @@ final class Tab: ObservableObject, Identifiable {
         pageStack.demoteAll { $0.webView === wv }
     }
 
+    /// The live web view a back/forward gesture would reveal — shown UNDER the
+    /// current page during an interactive swipe so the real screen "flips" into
+    /// view. nil when native in-page history would win (WebKit's own gesture) or
+    /// when the next stack entry is a placeholder (nothing live to show).
+    func peekView(back: Bool) -> WKWebView? {
+        if back {
+            guard !webView.canGoBack else { return nil }
+            return pageStack.backTop?.webView
+        }
+        guard !webView.canGoForward else { return nil }
+        return pageStack.forwardTop?.webView
+    }
+
     private func currentPage() -> StackedPage {
         StackedPage(webView: webView, url: webView.url ?? pendingURL, title: title)
     }

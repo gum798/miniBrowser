@@ -90,4 +90,17 @@ final class PageStackTests: XCTestCase {
         XCTAssertFalse(s.canGoBack)
         XCTAssertFalse(s.canGoForward)
     }
+
+    func testTopsPeekWithoutMutating() {
+        var s = makeStack()
+        XCTAssertNil(s.backTop)
+        XCTAssertNil(s.forwardTop)
+        s.push(current: .live("A"))
+        s.push(current: .live("B"))
+        XCTAssertEqual(s.backTop, .live("B"))            // what goBack() would reveal
+        XCTAssertEqual(s.back, [.live("A"), .live("B")]) // unchanged by peeking
+        _ = s.goBack(current: .live("C"))
+        XCTAssertEqual(s.forwardTop, .live("C"))         // what goForward() would reveal
+        XCTAssertEqual(s.backTop, .live("A"))
+    }
 }

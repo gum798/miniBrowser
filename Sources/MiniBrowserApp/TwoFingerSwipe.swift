@@ -13,6 +13,7 @@ final class TwoFingerSwipe {
     private var accumX: CGFloat = 0
     private var accumY: CGFloat = 0
     private var goingBack = true
+    private var peek: WKWebView?   // live page shown under the current one while swiping
     private var mode: Mode = .idle
     private let threshold: CGFloat = 80   // accumulated horizontal points to commit
 
@@ -63,13 +64,17 @@ final class TwoFingerSwipe {
                 }
             }
             guard mode == .navigating else { return event }
+            installPeekIfNeeded(tab: tab, under: webView)
             setOffset(offset(), on: webView)
             return nil
         case .ended, .cancelled:
             guard mode == .navigating else { mode = .idle; return event }
-            setOffset(0, on: webView)                          // new page renders in place
+            setOffset(0, on: webView)                          // reset before any stack swap
             if (goingBack ? accumX : -accumX) >= threshold {
                 if goingBack { tab.goBack() } else { tab.goForward() }
+                peek = nil                                     // swap re-attaches subviews
+            } else {
+                removePeek(afterDelay: 0.25)                   // visible under the snap-back
             }
             mode = .swallowingMomentum
             return nil
@@ -85,5 +90,22 @@ final class TwoFingerSwipe {
 
     private func setOffset(_ dx: CGFloat, on webView: WKWebView) {
         webView.layer?.setAffineTransform(CGAffineTransform(translationX: dx, y: 0))
+    }
+
+    /// Put the live page the gesture would reveal UNDER the current web view
+    /// (book-flip effect, same as the edge drag).
+    private func installPeekIfNeeded(tab: Tab, under webView: WKWebView) {
+        guard peek == nil, let container = webView.superview,
+              let target = tab.peekView(back: goingBack) else { return }
+        target.frame = container.bounds
+        target.autoresizingMask = [.width, .height]
+        container.addSubview(target, positioned: .below, relativeTo: webView)
+        peek = target
+    }
+
+    private func removePeek(afterDelay delay: TimeInterval) {
+        guard let peek else { return }
+        self.peek = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { peek.removeFromSuperview() }
     }
 }
