@@ -790,6 +790,233 @@ git commit -m "feat: two-finger trackpad swipe navigates the page stack"
 
 ---
 
+### Task 7: Live reveal — book-flip back/forward (added 2026-07-03, user request)
+
+**Files:**
+- Modify: `Sources/MiniBrowserCore/PageStack.swift`
+- Modify: `Tests/MiniBrowserCoreTests/PageStackTests.swift`
+- Modify: `Sources/MiniBrowserApp/Tab.swift`
+- Modify: `Sources/MiniBrowserApp/EdgeSwipeOverlay.swift`
+- Modify: `Sources/MiniBrowserApp/TwoFingerSwipe.swift`
+
+**Interfaces:**
+- Consumes: `PageStack` (Task 1), `Tab` page stack (Task 3), gesture code (Tasks 4–5).
+- Produces:
+  - `PageStack.backTop: Element?` / `PageStack.forwardTop: Element?` (peek, non-mutating)
+  - `Tab.peekView(back: Bool) -> WKWebView?` — live web view a gesture would reveal, or nil.
+
+- [ ] **Step 1: Write failing tests for the peek API**
+
+Append to `Tests/MiniBrowserCoreTests/PageStackTests.swift` (inside the class):
+
+```swift
+    func testTopsPeekWithoutMutating() {
+        var s = makeStack()
+        XCTAssertNil(s.backTop)
+        XCTAssertNil(s.forwardTop)
+        s.push(current: .live("A"))
+        s.push(current: .live("B"))
+        XCTAssertEqual(s.backTop, .live("B"))            // what goBack() would reveal
+        XCTAssertEqual(s.back, [.live("A"), .live("B")]) // unchanged by peeking
+        _ = s.goBack(current: .live("C"))
+        XCTAssertEqual(s.forwardTop, .live("C"))         // what goForward() would reveal
+        XCTAssertEqual(s.backTop, .live("A"))
+    }
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `swift test --filter PageStackTests`
+Expected: compile FAILURE — `value of type 'PageStack<P>' has no member 'backTop'`
+
+- [ ] **Step 3: Implement the peek API**
+
+In `Sources/MiniBrowserCore/PageStack.swift`, after the `canGoForward` property, add:
+
+```swift
+    /// The entry `goBack()` would reveal next (stack top), without mutating.
+    public var backTop: Element? { back.last }
+    /// The entry `goForward()` would reveal next (stack top), without mutating.
+    public var forwardTop: Element? { forward.last }
+```
+
+- [ ] **Step 4: Run to verify pass**
+
+Run: `swift test --filter PageStackTests`
+Expected: `Executed 9 tests, with 0 failures`
+
+- [ ] **Step 5: Add `Tab.peekView(back:)`**
+
+In `Sources/MiniBrowserApp/Tab.swift`, after `backgroundPageDied(_:)`, add:
+
+```swift
+    /// The live web view a back/forward gesture would reveal — shown UNDER the
+    /// current page during an interactive swipe so the real screen "flips" into
+    /// view. nil when native in-page history would win (WebKit's own gesture) or
+    /// when the next stack entry is a placeholder (nothing live to show).
+    func peekView(back: Bool) -> WKWebView? {
+        if back {
+            guard !webView.canGoBack else { return nil }
+            return pageStack.backTop?.webView
+        }
+        guard !webView.canGoForward else { return nil }
+        return pageStack.forwardTop?.webView
+    }
+```
+
+- [ ] **Step 6: Reveal the live page under the edge drag**
+
+In `Sources/MiniBrowserApp/EdgeSwipeOverlay.swift`:
+
+Add a property after `private var offset: CGFloat = 0`:
+
+```swift
+    private var peek: WKWebView?   // live page shown under the current one while swiping
+```
+
+In `mouseDragged`, replace the line `if swiping { setOffset(fromLeft ? max(0, dx) : min(0, dx)) }` with:
+
+```swift
+        if swiping {
+            installPeekIfNeeded()
+            setOffset(fromLeft ? max(0, dx) : min(0, dx))
+        }
+```
+
+In `mouseUp`, replace the `if swiping { ... }` block with:
+
+```swift
+        if swiping {
+            if (fromLeft ? dx : -dx) >= threshold() {
+                setOffset(0)                 // reset before the view goes on the stack
+                if fromLeft { tab?.goBack() } else { tab?.goForward() }
+                peek = nil                   // the swap re-attaches subviews; nothing to remove
+            } else {
+                setOffset(0, animated: true) // snap back
+                removePeek(afterDelay: 0.25) // keep it visible under the snap-back animation
+            }
+        } else if event.timestamp - downTime >= longPress {
+            forwardClick(at: downPoint)       // long press -> real click
+        }                                     // quick tap -> swallowed
+        swiping = false
+```
+
+Add these two methods before `setOffset`:
+
+```swift
+    /// Put the live page the gesture would reveal UNDER the current web view, so
+    /// dragging the page aside uncovers the real screen (book-flip effect).
+    private func installPeekIfNeeded() {
+        guard peek == nil, let container = superview, let current = tab?.webView,
+              let target = tab?.peekView(back: fromLeft) else { return }
+        target.frame = container.bounds
+        target.autoresizingMask = [.width, .height]
+        container.addSubview(target, positioned: .below, relativeTo: current)
+        peek = target
+    }
+
+    private func removePeek(afterDelay delay: TimeInterval) {
+        guard let peek else { return }
+        self.peek = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { peek.removeFromSuperview() }
+    }
+```
+
+In `draw(_:)`, add as the first line (the real page underneath is a better hint than the chevron):
+
+```swift
+        guard peek == nil else { return }
+```
+
+- [ ] **Step 7: Same reveal for the two-finger swipe**
+
+In `Sources/MiniBrowserApp/TwoFingerSwipe.swift`:
+
+Add a property after `private var goingBack = true`:
+
+```swift
+    private var peek: WKWebView?   // live page shown under the current one while swiping
+```
+
+In `handle(_:)`, in the `.changed` case, replace:
+
+```swift
+            guard mode == .navigating else { return event }
+            setOffset(offset(), on: webView)
+            return nil
+```
+
+with:
+
+```swift
+            guard mode == .navigating else { return event }
+            installPeekIfNeeded(tab: tab, under: webView)
+            setOffset(offset(), on: webView)
+            return nil
+```
+
+In the `.ended, .cancelled` case, replace:
+
+```swift
+            setOffset(0, on: webView)                          // new page renders in place
+            if (goingBack ? accumX : -accumX) >= threshold {
+                if goingBack { tab.goBack() } else { tab.goForward() }
+            }
+            mode = .swallowingMomentum
+            return nil
+```
+
+with:
+
+```swift
+            setOffset(0, on: webView)                          // reset before any stack swap
+            if (goingBack ? accumX : -accumX) >= threshold {
+                if goingBack { tab.goBack() } else { tab.goForward() }
+                peek = nil                                     // swap re-attaches subviews
+            } else {
+                removePeek(afterDelay: 0.25)                   // visible under the snap-back
+            }
+            mode = .swallowingMomentum
+            return nil
+```
+
+Add these two methods after `setOffset(_:on:)`:
+
+```swift
+    /// Put the live page the gesture would reveal UNDER the current web view
+    /// (book-flip effect, same as the edge drag).
+    private func installPeekIfNeeded(tab: Tab, under webView: WKWebView) {
+        guard peek == nil, let container = webView.superview,
+              let target = tab.peekView(back: goingBack) else { return }
+        target.frame = container.bounds
+        target.autoresizingMask = [.width, .height]
+        container.addSubview(target, positioned: .below, relativeTo: webView)
+        peek = target
+    }
+
+    private func removePeek(afterDelay delay: TimeInterval) {
+        guard let peek else { return }
+        self.peek = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { peek.removeFromSuperview() }
+    }
+```
+
+- [ ] **Step 8: Build and full test run**
+
+Run: `swift build && swift test`
+Expected: clean build, 76 tests, 0 failures.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add Sources/MiniBrowserCore/PageStack.swift Tests/MiniBrowserCoreTests/PageStackTests.swift \
+        Sources/MiniBrowserApp/Tab.swift Sources/MiniBrowserApp/EdgeSwipeOverlay.swift \
+        Sources/MiniBrowserApp/TwoFingerSwipe.swift
+git commit -m "feat: live book-flip reveal — real previous page shows under back/forward swipes"
+```
+
+---
+
 ### Task 6: End-to-end verification, regressions, push
 
 **Files:** none (verification only; fix-forward commits if issues found).
