@@ -73,7 +73,29 @@ struct WebView: NSViewRepresentable {
             return tab.webView   // WebKit drives the load; preserves window.opener
         }
 
+        // Link clicks load into a NEW web view so the current page stays alive on
+        // the tab's page stack — going back is then instant (no reload). Fragment
+        // jumps, non-web schemes, new-window targets (targetFrame == nil -> handled
+        // by createWebViewWith) and the very first page stay in this web view.
+        func webView(_ webView: WKWebView,
+                     decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let tab,
+               navigationAction.navigationType == .linkActivated,
+               navigationAction.targetFrame?.isMainFrame == true,
+               webView === tab.webView,                    // not a stacked background page
+               tab.url != nil,                             // not the tab's very first load
+               let url = navigationAction.request.url,
+               LinkNavigation.shouldStack(url: url, currentURL: webView.url) {
+                decisionHandler(.cancel)
+                tab.pushNewPage(loading: url)
+                return
+            }
+            decisionHandler(.allow)
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard webView === tab?.webView else { return }   // a stacked background page finished — ignore
             tab?.loadError = nil   // clear stale overlay (covers in-page links, goBack/goForward)
             if tab?.inverted == true { tab?.applyInvert() }   // re-apply invert on the new document
             ElementHider.shared.onPageLoaded(webView)         // re-hide remembered elements / re-arm picker
@@ -107,10 +129,15 @@ struct WebView: NSViewRepresentable {
         }
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             FileHandle.standardError.write(Data("WebContent process terminated — reloading (G2)\n".utf8))
-            webView.reloadFromOrigin()   // re-fetch fresh so encoding/state is re-derived, not restored stale
+            if webView === tab?.webView {
+                webView.reloadFromOrigin()   // re-fetch fresh so encoding/state is re-derived, not restored stale
+            } else {
+                tab?.backgroundPageDied(webView)   // demote to placeholder; reloads when shown
+            }
         }
         private func report(_ error: Error, on webView: WKWebView) {
             FileHandle.standardError.write(Data("nav failed: \(error)\n".utf8))
+            guard webView === tab?.webView else { return }               // background page — no overlay
             if (error as NSError).code == NSURLErrorCancelled { return }  // -999: stop()/redirects
             tab?.loadError = error.localizedDescription
         }
