@@ -70,14 +70,22 @@ final class TwoFingerSwipe {
         case .ended, .cancelled:
             guard mode == .navigating else { mode = .idle; return event }
             let commit = (goingBack ? accumX : -accumX) >= threshold
-            // Leave the page translated when a live peek will be swapped in — the
-            // revealed page is already fully visible beneath; resetting first would
-            // flash the old page back over it for a frame.
-            if peek == nil || !commit { setOffset(0, on: webView) }
             if commit {
+                let old = tab.webView
                 if goingBack { tab.goBack() } else { tab.goForward() }
-                peek = nil                                     // swap re-attaches subviews
+                if old !== tab.webView {
+                    // Normalize the container (see EdgeSwipeOverlay.mouseUp): with the
+                    // peek at subviews.first, updateNSView cannot see this swap.
+                    peek?.removeFromSuperview()
+                    old.removeFromSuperview()
+                    old.layer?.setAffineTransform(.identity)   // clean for its life on the stack
+                } else {
+                    setOffset(0, on: webView)                  // same view stays — undo the drag
+                    peek?.removeFromSuperview()
+                }
+                peek = nil
             } else {
+                setOffset(0, on: webView)                      // snap back
                 removePeek(afterDelay: 0.25)                   // visible under the snap-back
             }
             mode = .swallowingMomentum
@@ -111,6 +119,9 @@ final class TwoFingerSwipe {
     private func removePeek(afterDelay delay: TimeInterval) {
         guard let peek else { return }
         self.peek = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { peek.removeFromSuperview() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard self?.peek !== peek else { return }   // re-installed by a newer swipe — keep it
+            peek.removeFromSuperview()
+        }
     }
 }

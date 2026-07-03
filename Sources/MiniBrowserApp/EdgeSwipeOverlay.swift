@@ -71,14 +71,24 @@ final class EdgeSwipeOverlay: NSView {
         let dx = convert(event.locationInWindow, from: nil).x - downPoint.x
         if swiping {
             if (fromLeft ? dx : -dx) >= threshold() {
-                // With a live peek beneath, leave the page where the drag ended: the
-                // swap replaces it with the (already fully visible) revealed page in
-                // the same frame — resetting first would flash the old page back over
-                // it. Without a peek (native history / placeholder) the view stays,
-                // so the transform must be reset.
-                if peek == nil { setOffset(0) }
+                let old = tab?.webView
                 if fromLeft { tab?.goBack() } else { tab?.goForward() }
-                peek = nil                   // the swap re-attaches subviews; nothing to remove
+                if old !== tab?.webView {
+                    // Swapped to a stack page. Normalize the container ourselves:
+                    // with the peek sitting at subviews.first, updateNSView's
+                    // `subviews.first !== webView` check cannot see this swap, so
+                    // the old (translated) view would linger on top. Removing both
+                    // here makes the queued SwiftUI pass re-attach the new current
+                    // view cleanly (constraints + fresh overlay), with no paint in
+                    // between.
+                    peek?.removeFromSuperview()
+                    old?.removeFromSuperview()
+                    old?.layer?.setAffineTransform(.identity)   // clean for its life on the stack
+                } else {
+                    setOffset(0)                 // same view stays (native history) — undo the drag
+                    peek?.removeFromSuperview()  // defensive: no peek should exist on this path
+                }
+                peek = nil
             } else {
                 setOffset(0, animated: true) // snap back
                 removePeek(afterDelay: 0.25) // keep it visible under the snap-back animation
@@ -104,7 +114,10 @@ final class EdgeSwipeOverlay: NSView {
     private func removePeek(afterDelay delay: TimeInterval) {
         guard let peek else { return }
         self.peek = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { peek.removeFromSuperview() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard self?.peek !== peek else { return }   // re-installed by a newer swipe — keep it
+            peek.removeFromSuperview()
+        }
     }
 
     /// Slide the web view to follow the drag; redraw the chevron hint.
