@@ -109,6 +109,7 @@ final class TwoFingerSwipe {
     private func installPeekIfNeeded(tab: Tab, under webView: WKWebView) {
         guard peek == nil, let container = webView.superview,
               let target = tab.peekView(back: goingBack) else { return }
+        target.translatesAutoresizingMaskIntoConstraints = true   // frame-based while peeking (attach() re-enables constraints)
         target.frame = container.bounds
         target.autoresizingMask = [.width, .height]
         target.layer?.setAffineTransform(.identity)   // clear any stale swipe transform

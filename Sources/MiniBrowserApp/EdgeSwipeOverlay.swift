@@ -104,6 +104,7 @@ final class EdgeSwipeOverlay: NSView {
     private func installPeekIfNeeded() {
         guard peek == nil, let container = superview, let current = tab?.webView,
               let target = tab?.peekView(back: fromLeft) else { return }
+        target.translatesAutoresizingMaskIntoConstraints = true   // frame-based while peeking (attach() re-enables constraints)
         target.frame = container.bounds
         target.autoresizingMask = [.width, .height]
         target.layer?.setAffineTransform(.identity)   // clear any stale swipe transform
