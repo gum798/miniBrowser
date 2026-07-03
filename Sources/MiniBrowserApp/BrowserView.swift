@@ -7,6 +7,7 @@ struct BrowserView: View {
     @StateObject private var boss = BossMode()
     @State private var showTabs = false
     @State private var keyMonitor: Any?
+    @State private var twoFingerSwipe: TwoFingerSwipe?
     private let historyStore = HistoryStore(directory: AppPaths.supportDirectory())
     private let bookmarkStore = BookmarkStore(directory: AppPaths.supportDirectory())
 
@@ -30,6 +31,9 @@ struct BrowserView: View {
         .onAppear {
             if model.tabs.isEmpty { model.restore() }   // restore previous session (or start page)
             installZoomKeys()
+            if twoFingerSwipe == nil {
+                twoFingerSwipe = TwoFingerSwipe { [weak model] in model?.active }
+            }
         }
         .onDisappear {
             if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
