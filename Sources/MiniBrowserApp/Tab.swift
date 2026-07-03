@@ -24,6 +24,13 @@ final class Tab: ObservableObject, Identifiable {
 
     private var kvo: [NSKeyValueObservation] = []
 
+    /// Pages kept alive for instant back/forward. Capped at 5 live web views per
+    /// direction; older entries become URL placeholders that reload when shown.
+    private var pageStack = PageStack<StackedPage>(
+        liveLimit: 5,
+        isLive: { $0.isLive },
+        demote: { $0.demoted() })
+
     init(configuration: WKWebViewConfiguration = WKWebViewConfiguration()) {
         webView = Self.makeWebView(configuration)
         observe()
@@ -59,13 +66,11 @@ final class Tab: ObservableObject, Identifiable {
                 let value = change.newValue ?? 0
                 MainActor.assumeIsolated { self?.progress = value }
             },
-            webView.observe(\.canGoBack, options: [.new]) { [weak self] _, change in
-                let value = change.newValue ?? false
-                MainActor.assumeIsolated { self?.canGoBack = value }
+            webView.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.syncNavFlags() }
             },
-            webView.observe(\.canGoForward, options: [.new]) { [weak self] _, change in
-                let value = change.newValue ?? false
-                MainActor.assumeIsolated { self?.canGoForward = value }
+            webView.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.syncNavFlags() }
             },
             webView.observe(\.isLoading, options: [.new]) { [weak self] _, change in
                 let value = change.newValue ?? false
@@ -94,8 +99,19 @@ final class Tab: ObservableObject, Identifiable {
         self.pendingURL = nil
         load(pendingURL)
     }
-    func goBack() { webView.goBack() }
-    func goForward() { webView.goForward() }
+    /// Back/forward: in-page (native) history wins when the current web view has
+    /// it; otherwise swap in the live page from the stack — instant, no network.
+    func goBack() {
+        if webView.canGoBack { webView.goBack(); return }
+        guard let target = pageStack.goBack(current: currentPage()) else { return }
+        show(target)
+    }
+
+    func goForward() {
+        if webView.canGoForward { webView.goForward(); return }
+        guard let target = pageStack.goForward(current: currentPage()) else { return }
+        show(target)
+    }
     // Hard reload (re-fetch from origin, not cache) so a long-lived web view that
     // got into a bad text-decoding state recovers instead of re-rendering it stale.
     // Re-arms auto-recovery so a manual retry restarts the whole budget.
@@ -131,13 +147,7 @@ final class Tab: ObservableObject, Identifiable {
     /// is reset. The load is deferred (see `reattachLoad`) so it happens once the new
     /// view is mounted; `delay` additionally lets a wedged connection age out.
     private func rebuildWebView(loading target: URL?, afterDelay delay: Double) {
-        kvo.forEach { $0.invalidate() }; kvo = []
-        webView = Self.makeWebView(WKWebViewConfiguration())
-        observe()
-        AdBlocker.shared.register(webView)
-        ElementHider.shared.register(webView)
-        webView.pageZoom = zoom
-        if inverted { installInvertScript() }
+        adoptFresh(Self.makeWebView(WKWebViewConfiguration()))
         pendingURL = target           // loaded by reattachLoad() once the new view attaches
         reattachDelay = delay
         objectWillChange.send()       // swap the new web view into the view hierarchy
@@ -153,6 +163,76 @@ final class Tab: ObservableObject, Identifiable {
         // right after being attached doesn't render (its content process isn't mounted
         // yet). Recovery passes a larger delay to also drop the bad pooled connection.
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.load(pendingURL) }
+    }
+
+    // MARK: page stack (instant back/forward)
+
+    /// A link was clicked: keep the current page alive on the back stack and load
+    /// the URL in a fresh web view shown in its place — so going back is instant.
+    func pushNewPage(loading url: URL) {
+        pageStack.push(current: currentPage())   // dropped forward pages release here
+        adoptFresh(Self.makeWebView(WKWebViewConfiguration()))
+        loadError = nil
+        pendingURL = url              // loaded by reattachLoad() once the new view attaches
+        objectWillChange.send()       // swap the new web view into the view hierarchy
+    }
+
+    /// A stacked (background) page's WebContent process was terminated (e.g.
+    /// memory pressure): demote it so it reloads when shown instead of being blank.
+    func backgroundPageDied(_ wv: WKWebView) {
+        pageStack.demoteAll { $0.webView === wv }
+    }
+
+    private func currentPage() -> StackedPage {
+        StackedPage(webView: webView, url: webView.url ?? pendingURL, title: title)
+    }
+
+    /// Display a page coming off the stack: live pages appear as-is (DOM/scroll
+    /// preserved); placeholders get a fresh web view and reload their URL.
+    private func show(_ page: StackedPage) {
+        loadError = nil
+        if let live = page.webView {
+            adopt(live)
+            live.pageZoom = zoom      // zoom/invert may have changed while stacked
+            installInvertScript()
+            applyInvert()
+        } else {
+            adoptFresh(Self.makeWebView(WKWebViewConfiguration()))
+            pendingURL = page.url
+            url = page.url
+            title = page.title
+        }
+        objectWillChange.send()       // swap the web view into the view hierarchy
+    }
+
+    /// Make `newView` the tab's current web view: move KVO over and re-sync the
+    /// published state that KVO (registered without .initial) won't fire for.
+    private func adopt(_ newView: WKWebView) {
+        kvo.forEach { $0.invalidate() }; kvo = []
+        webView = newView
+        observe()
+        if let u = newView.url {      // live page: sync display state from the view
+            url = u
+            title = newView.title ?? ""
+        }                             // fresh view: keep current url/title until it loads
+        isLoading = newView.isLoading
+        progress = newView.estimatedProgress
+        syncNavFlags()
+    }
+
+    /// `adopt` for a brand-new web view: also register blockers and appearance.
+    private func adoptFresh(_ newView: WKWebView) {
+        AdBlocker.shared.register(newView)
+        ElementHider.shared.register(newView)
+        newView.pageZoom = zoom
+        adopt(newView)
+        if inverted { installInvertScript() }
+    }
+
+    /// Tab-level back/forward availability = native in-page history OR the stack.
+    private func syncNavFlags() {
+        canGoBack = webView.canGoBack || pageStack.canGoBack
+        canGoForward = webView.canGoForward || pageStack.canGoForward
     }
 
     /// After each load, whether the page came out garbled (mojibake or a raw HTTP
