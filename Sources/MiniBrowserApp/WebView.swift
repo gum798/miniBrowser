@@ -79,7 +79,7 @@ struct WebView: NSViewRepresentable {
         // by createWebViewWith) and the very first page stay in this web view.
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationAction: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+                     decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             if let tab,
                navigationAction.navigationType == .linkActivated,
                navigationAction.targetFrame?.isMainFrame == true,
