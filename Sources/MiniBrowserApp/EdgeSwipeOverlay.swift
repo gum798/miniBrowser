@@ -1,27 +1,30 @@
 import AppKit
 import WebKit
+import MiniBrowserCore
 
 /// Transparent overlay over the web view that turns a horizontal mouse drag from
 /// the left/right edge into back/forward navigation, iOS-style: the page follows
 /// the drag and a chevron hints the direction; releasing past the threshold
 /// navigates, otherwise it snaps back.
 ///
-/// It only intercepts the left/right edge zones (a third of the width each, ≥100pt)
-/// and only when navigation that way is possible, so the middle and dead edges work
-/// normally. Inside an active edge zone a quick tap is swallowed — so a swipe never
-/// activates a link/image — while a long press passes the click through to the page.
+/// It only intercepts the left/right edge zones (60pt each) and only when
+/// navigation that way is possible, so the middle and dead edges work normally.
+/// A press that stays within the tap slop is a deliberate tap on page content
+/// (sites put buttons in the strip) — its original mouse events are replayed
+/// into the web view, so in-strip controls stay clickable at any zoom. Only a
+/// press that moved without becoming a swipe (a failed swipe) is swallowed.
 @MainActor
 final class EdgeSwipeOverlay: NSView {
     weak var tab: Tab?
 
     private var downPoint: NSPoint = .zero
-    private var downTime: TimeInterval = 0
+    private var downEvent: NSEvent?         // replayed into the web view when the press turns out to be a tap
+    private var movement: CGFloat = 0       // max distance from downPoint, any direction
     private var fromLeft = true
     private var swiping = false
     private var offset: CGFloat = 0
     private var peek: WKWebView?   // live page shown under the current one while swiping
 
-    private let longPress: TimeInterval = 0.35
     private func edge() -> CGFloat { 60 }   // back/forward swipe strip width (pt)
     private func threshold() -> CGFloat { max(60, bounds.width * 0.22) }
 
@@ -49,7 +52,8 @@ final class EdgeSwipeOverlay: NSView {
 
     override func mouseDown(with event: NSEvent) {
         downPoint = convert(event.locationInWindow, from: nil)
-        downTime = event.timestamp
+        downEvent = event
+        movement = 0
         fromLeft = downPoint.x <= edge()
         swiping = false
     }
@@ -57,6 +61,7 @@ final class EdgeSwipeOverlay: NSView {
     override func mouseDragged(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         let dx = p.x - downPoint.x, dy = p.y - downPoint.y
+        movement = max(movement, hypot(dx, dy))
         if !swiping, abs(dx) > 8, abs(dx) > abs(dy),
            (fromLeft && dx > 0) || (!fromLeft && dx < 0) {
             swiping = true
@@ -93,10 +98,20 @@ final class EdgeSwipeOverlay: NSView {
                 setOffset(0, animated: true) // snap back
                 removePeek(afterDelay: 0.25) // keep it visible under the snap-back animation
             }
-        } else if event.timestamp - downTime >= longPress {
-            forwardClick(at: downPoint)       // long press -> real click
-        }                                     // quick tap -> swallowed
+        } else if EdgeTap.shouldForwardClick(becameSwipe: false, movement: movement) {
+            forwardTap(with: event)           // deliberate tap -> real click on the page
+        }                                     // moved-but-not-swipe -> swallowed
         swiping = false
+        downEvent = nil
+    }
+
+    /// Replay the press into the web view so an in-strip tap behaves like a normal
+    /// click. Real events keep window coordinates, so WebKit's own hit-testing does
+    /// the rest — correct at any page zoom, and focus/:active work as usual.
+    private func forwardTap(with up: NSEvent) {
+        guard let webView = tab?.webView else { return }
+        if let downEvent { webView.mouseDown(with: downEvent) }
+        webView.mouseUp(with: up)
     }
 
     /// Put the live page the gesture would reveal UNDER the current web view, so
@@ -146,12 +161,5 @@ final class EdgeSwipeOverlay: NSView {
         let sz = s.size()
         let cx = fromLeft ? reveal / 2 : bounds.width - reveal / 2
         s.draw(at: NSPoint(x: cx - sz.width / 2, y: bounds.midY - sz.height / 2))
-    }
-
-    /// Click the element under a long press by hit-testing the page (overlay coords
-    /// are top-left and ≈ CSS pixels for the mobile-width viewport).
-    private func forwardClick(at p: NSPoint) {
-        tab?.webView.evaluateJavaScript(
-            "var e=document.elementFromPoint(\(Int(p.x)),\(Int(p.y)));if(e){e.click();}")
     }
 }
