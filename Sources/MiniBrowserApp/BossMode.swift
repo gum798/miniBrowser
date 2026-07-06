@@ -10,7 +10,11 @@ import AppKit
 @MainActor
 final class BossMode: ObservableObject {
     @Published var enabled = true {
-        didSet { if !enabled { restore() }; idleSince = Date() }
+        didSet {
+            if !enabled { restore() }
+            idleSince = Date()
+            AppSettings.shared.bossModeEnabled = enabled   // persist (no-op if unchanged)
+        }
     }
 
     private weak var window: NSWindow?
@@ -21,6 +25,10 @@ final class BossMode: ObservableObject {
 
     private let idleLimit: TimeInterval = 10
     private let shrunkSize = NSSize(width: 160, height: 140)
+
+    init() {
+        enabled = AppSettings.shared.bossModeEnabled
+    }
 
     func attach(_ window: NSWindow) {
         guard self.window == nil else { return }   // wire up once

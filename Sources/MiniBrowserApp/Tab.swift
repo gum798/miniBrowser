@@ -36,6 +36,8 @@ final class Tab: ObservableObject, Identifiable {
         observe()
         AdBlocker.shared.register(webView)                       // iPhone-Safari-style ad blocking
         ElementHider.shared.register(webView)                    // user-picked "방해 요소 가리기"
+        inverted = AppSettings.shared.inverted   // global setting drives inversion
+        if inverted { installInvertScript() }
     }
 
     private static func makeWebView(_ configuration: WKWebViewConfiguration) -> WKWebView {
@@ -84,13 +86,11 @@ final class Tab: ObservableObject, Identifiable {
         webView.load(URLRequest(url: url))
     }
 
-    /// Restore persisted per-tab state (zoom + color inversion). The URL is set
-    /// separately as `pendingURL` and loaded on first activation.
-    func applyRestored(zoom: Double, inverted: Bool) {
+    /// Restore persisted per-tab state (zoom). Inversion is a global setting now;
+    /// the URL is set separately as `pendingURL` and loaded on first activation.
+    func applyRestored(zoom: Double) {
         self.zoom = zoom
         webView.pageZoom = zoom
-        self.inverted = inverted
-        if inverted { installInvertScript() }
     }
 
     /// Load the restored URL the first time the tab is shown.
@@ -277,8 +277,10 @@ final class Tab: ObservableObject, Identifiable {
 
     // Color inversion (dark-mode-ish): inject/remove a CSS filter. Re-applied
     // after each page load via `applyInvert()` from the navigation delegate.
-    func toggleInvert() {
-        inverted.toggle()
+    /// Apply the app-wide inversion setting to this tab (no-op when unchanged).
+    func setInverted(_ on: Bool) {
+        guard inverted != on else { return }
+        inverted = on
         installInvertScript()   // applies to every future load, from the first paint
         applyInvert()           // and to the page already on screen
     }

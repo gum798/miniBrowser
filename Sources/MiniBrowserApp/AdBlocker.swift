@@ -10,13 +10,19 @@ final class AdBlocker: ObservableObject {
     static let shared = AdBlocker()
 
     @Published var enabled = true {
-        didSet { applyAll() }
+        didSet {
+            applyAll()
+            AppSettings.shared.adBlockEnabled = enabled   // persist (no-op if unchanged)
+        }
     }
 
     private var ruleList: WKContentRuleList?
     private let webViews = NSHashTable<WKWebView>.weakObjects()
 
-    private init() { compile() }
+    private init() {
+        enabled = AppSettings.shared.adBlockEnabled   // fires didSet: applyAll on empty set is harmless
+        compile()
+    }
 
     /// Track a tab's web view and apply the blocker to it.
     func register(_ webView: WKWebView) {

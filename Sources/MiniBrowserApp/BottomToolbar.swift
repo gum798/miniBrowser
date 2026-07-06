@@ -5,6 +5,7 @@ struct BottomToolbar: View {
     @ObservedObject var boss: BossMode
     @ObservedObject private var adBlocker = AdBlocker.shared
     @ObservedObject private var hider = ElementHider.shared
+    @ObservedObject private var settings = AppSettings.shared
     let tabCount: Int
     let isBookmarked: Bool
     let onToggleBookmark: () -> Void
@@ -31,10 +32,10 @@ struct BottomToolbar: View {
                 }
                 .disabled(tab.url == nil)
                 Divider()
-                Button { tab.toggleInvert() } label: {
-                    Label(tab.inverted ? "색 반전 끄기" : "색 반전", systemImage: "circle.righthalf.filled")
+                Button { settings.inverted.toggle() } label: {
+                    Label(settings.inverted ? "색 반전 끄기" : "색 반전 (전체)",
+                          systemImage: "circle.righthalf.filled")
                 }
-                .disabled(tab.url == nil)
                 Divider()
                 Button { hider.picking.toggle() } label: {
                     Label(hider.picking ? "방해 요소 가리기: 켜짐 (요소 하나 클릭)" : "방해 요소 가리기",

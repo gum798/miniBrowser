@@ -27,6 +27,10 @@ final class TabsModel: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.persist() }
         }
+        // A global inversion change applies to every live tab immediately.
+        AppSettings.shared.onInvertedChange = { [weak self] on in
+            self?.tabs.forEach { $0.setInverted(on) }
+        }
     }
 
     private func sync() {
@@ -70,9 +74,15 @@ final class TabsModel: ObservableObject {
             newTab()
             return
         }
+        // One-time migration (no settings.json yet): the previous per-tab
+        // inversion of the active tab becomes the initial global value.
+        let activeIdx = session.activeIndex ?? 0
+        let sessionInverted = session.tabs.indices.contains(activeIdx)
+            ? session.tabs[activeIdx].inverted : false
+        AppSettings.shared.migrateInvertedIfNeeded(fromSession: sessionInverted)
         for snap in session.tabs {
             let tab = Tab()
-            tab.applyRestored(zoom: snap.zoom, inverted: snap.inverted)
+            tab.applyRestored(zoom: snap.zoom)
             tab.title = snap.title         // show the saved name before the tab loads
             tab.pendingURL = snap.url
             register(tab)
@@ -99,7 +109,8 @@ final class TabsModel: ObservableObject {
 
     private func persist() {
         let snaps = tabs.map {
-            TabSnapshot(url: $0.url ?? $0.pendingURL, title: $0.title, zoom: $0.zoom, inverted: $0.inverted)
+            TabSnapshot(url: $0.url ?? $0.pendingURL, title: $0.title, zoom: $0.zoom,
+                        inverted: AppSettings.shared.inverted)
         }
         let activeIndex = activeID.flatMap { id in tabs.firstIndex { $0.id == id } }
         sessionStore.save(Session(tabs: snaps, activeIndex: activeIndex))
