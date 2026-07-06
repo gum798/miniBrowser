@@ -20,7 +20,7 @@ final class AdBlocker: ObservableObject {
     private let webViews = NSHashTable<WKWebView>.weakObjects()
 
     private init() {
-        enabled = AppSettings.shared.adBlockEnabled   // fires didSet: applyAll on empty set is harmless
+        enabled = AppSettings.shared.adBlockEnabled   // didSet does NOT fire during init; compile() applies the rules
         compile()
     }
 
