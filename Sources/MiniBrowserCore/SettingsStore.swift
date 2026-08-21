@@ -6,11 +6,17 @@ public struct Settings: Codable, Equatable {
     public var inverted: Bool          // global color inversion (dark-mode-ish)
     public var adBlockEnabled: Bool
     public var bossModeEnabled: Bool   // shrink the window when idle (자리비움 자동 숨김)
+    public var windowOpacity: Double   // whole-window alpha, minWindowOpacity...1
 
-    public init(inverted: Bool = false, adBlockEnabled: Bool = true, bossModeEnabled: Bool = true) {
+    /// Floor for `windowOpacity`: a near-invisible window can't be found or clicked.
+    public static let minWindowOpacity = 0.3
+
+    public init(inverted: Bool = false, adBlockEnabled: Bool = true, bossModeEnabled: Bool = true,
+                windowOpacity: Double = 1.0) {
         self.inverted = inverted
         self.adBlockEnabled = adBlockEnabled
         self.bossModeEnabled = bossModeEnabled
+        self.windowOpacity = windowOpacity
     }
 
     public init(from decoder: Decoder) throws {
@@ -18,6 +24,8 @@ public struct Settings: Codable, Equatable {
         inverted = try c.decodeIfPresent(Bool.self, forKey: .inverted) ?? false
         adBlockEnabled = try c.decodeIfPresent(Bool.self, forKey: .adBlockEnabled) ?? true
         bossModeEnabled = try c.decodeIfPresent(Bool.self, forKey: .bossModeEnabled) ?? true
+        let opacity = try c.decodeIfPresent(Double.self, forKey: .windowOpacity) ?? 1.0
+        windowOpacity = min(max(opacity, Self.minWindowOpacity), 1.0)
     }
 }
 

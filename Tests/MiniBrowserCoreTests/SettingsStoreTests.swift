@@ -54,4 +54,36 @@ final class SettingsStoreTests: XCTestCase {
         store.save(Settings())
         XCTAssertTrue(store.fileExists)
     }
+
+    // MARK: - windowOpacity
+
+    func testWindowOpacityDefaultsToOpaque() {
+        XCTAssertEqual(Settings().windowOpacity, 1.0)
+    }
+
+    func testWindowOpacityRoundTrip() {
+        let dir = tempDir()
+        let s = Settings(windowOpacity: 0.55)
+        SettingsStore(directory: dir).save(s)
+        XCTAssertEqual(SettingsStore(directory: dir).load().windowOpacity, 0.55)
+    }
+
+    func testWindowOpacityMissingInOlderFileDefaultsToOpaque() throws {
+        let dir = tempDir()
+        try Data(#"{"inverted":true}"#.utf8).write(to: dir.appendingPathComponent("settings.json"))
+        XCTAssertEqual(SettingsStore(directory: dir).load().windowOpacity, 1.0)
+    }
+
+    func testWindowOpacityTooLowIsClampedToFloor() throws {
+        // A window at 0% alpha can't be found or clicked; never load one.
+        let dir = tempDir()
+        try Data(#"{"windowOpacity":0}"#.utf8).write(to: dir.appendingPathComponent("settings.json"))
+        XCTAssertEqual(SettingsStore(directory: dir).load().windowOpacity, Settings.minWindowOpacity)
+    }
+
+    func testWindowOpacityTooHighIsClampedToOpaque() throws {
+        let dir = tempDir()
+        try Data(#"{"windowOpacity":2}"#.utf8).write(to: dir.appendingPathComponent("settings.json"))
+        XCTAssertEqual(SettingsStore(directory: dir).load().windowOpacity, 1.0)
+    }
 }

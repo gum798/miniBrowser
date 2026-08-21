@@ -1,7 +1,7 @@
 import Foundation
 import MiniBrowserCore
 
-/// App-wide persisted settings: global color inversion, ad blocking, boss mode.
+/// App-wide persisted settings: global color inversion, ad blocking, boss mode, window opacity.
 /// Loads once from settings.json at launch and saves immediately on every change.
 @MainActor
 final class AppSettings: ObservableObject {
@@ -27,6 +27,9 @@ final class AppSettings: ObservableObject {
     @Published var bossModeEnabled: Bool {
         didSet { if oldValue != bossModeEnabled { save() } }
     }
+    @Published var windowOpacity: Double {
+        didSet { if oldValue != windowOpacity { save() } }
+    }
 
     private let store = SettingsStore(directory: AppPaths.supportDirectory())
 
@@ -36,6 +39,7 @@ final class AppSettings: ObservableObject {
         inverted = s.inverted
         adBlockEnabled = s.adBlockEnabled
         bossModeEnabled = s.bossModeEnabled
+        windowOpacity = s.windowOpacity
     }
 
     /// First run without a settings file: inherit the session's inversion so the
@@ -48,6 +52,7 @@ final class AppSettings: ObservableObject {
     private func save() {
         store.save(Settings(inverted: inverted,
                             adBlockEnabled: adBlockEnabled,
-                            bossModeEnabled: bossModeEnabled))
+                            bossModeEnabled: bossModeEnabled,
+                            windowOpacity: windowOpacity))
     }
 }

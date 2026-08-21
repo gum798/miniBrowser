@@ -5,6 +5,8 @@ import MiniBrowserCore
 struct BrowserView: View {
     @StateObject private var model = TabsModel()
     @StateObject private var boss = BossMode()
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var window: NSWindow?
     @State private var showTabs = false
     @State private var keyMonitor: Any?
     @State private var twoFingerSwipe: TwoFingerSwipe?
@@ -27,7 +29,12 @@ struct BrowserView: View {
                 .id(tab.id)   // rebind chrome when the active tab changes; web view persists in the model
             }
         }
-        .background(WindowReader { boss.attach($0) })   // boss key: shrink when idle
+        .background(WindowReader { w in
+            boss.attach(w)                              // boss key: shrink when idle
+            window = w
+            w.alphaValue = settings.windowOpacity
+        })
+        .onChange(of: settings.windowOpacity) { _, new in window?.alphaValue = new }
         .onAppear {
             if model.tabs.isEmpty { model.restore() }   // restore previous session (or start page)
             installZoomKeys()

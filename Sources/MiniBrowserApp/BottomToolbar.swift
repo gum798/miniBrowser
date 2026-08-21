@@ -1,4 +1,5 @@
 import SwiftUI
+import MiniBrowserCore
 
 struct BottomToolbar: View {
     @ObservedObject var tab: Tab
@@ -64,6 +65,17 @@ struct BottomToolbar: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            Spacer()
+            Slider(value: $settings.windowOpacity, in: Settings.minWindowOpacity...1) {
+                EmptyView()
+            } minimumValueLabel: {
+                Image(systemName: "circle.dotted")
+            } maximumValueLabel: {
+                Image(systemName: "circle.fill")
+            }
+            .controlSize(.mini)
+            .frame(width: 80)
+            .help("창 투명도 (\(Int(settings.windowOpacity * 100))%)")
             Spacer()
             Button(action: onShowTabs) {
                 Label("\(tabCount)", systemImage: "square.on.square")
