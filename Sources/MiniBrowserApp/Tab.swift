@@ -31,13 +31,36 @@ final class Tab: ObservableObject, Identifiable {
         isLive: { $0.isLive },
         demote: { $0.demoted() })
 
-    init(configuration: WKWebViewConfiguration = WKWebViewConfiguration()) {
+    /// Whether this tab was opened from a link (e.g. target=_blank, window.open, or cmd-click).
+    var openedByLink: Bool = false {
+        didSet { syncNavFlags() }
+    }
+    /// The ID of the tab that opened this tab, if any.
+    var openerID: UUID?
+
+    /// Called when the user attempts to go back past the tab's history and the tab was opened by a link.
+    var onCloseRequested: (() -> Void)?
+
+    /// Whether going back should close this tab. Managed by `TabsModel` based on `openedByLink`
+    /// and whether there are other tabs to return to.
+    @Published var canCloseOnBack: Bool = false {
+        didSet { syncNavFlags() }
+    }
+
+    init(
+        configuration: WKWebViewConfiguration = WKWebViewConfiguration(),
+        openedByLink: Bool = false,
+        openerID: UUID? = nil
+    ) {
+        self.openedByLink = openedByLink
+        self.openerID = openerID
         webView = Self.makeWebView(configuration)
         observe()
         AdBlocker.shared.register(webView)                       // iPhone-Safari-style ad blocking
         ElementHider.shared.register(webView)                    // user-picked "방해 요소 가리기"
         inverted = AppSettings.shared.inverted   // global setting drives inversion
         if inverted { installInvertScript() }
+        syncNavFlags()
     }
 
     private static func makeWebView(_ configuration: WKWebViewConfiguration) -> WKWebView {
@@ -101,10 +124,16 @@ final class Tab: ObservableObject, Identifiable {
     }
     /// Back/forward: in-page (native) history wins when the current web view has
     /// it; otherwise swap in the live page from the stack — instant, no network.
+    /// If history is empty and this tab was opened from a link, navigating back closes the tab.
     func goBack() {
         if webView.canGoBack { webView.goBack(); return }
-        guard let target = pageStack.goBack(current: currentPage()) else { return }
-        show(target)
+        if let target = pageStack.goBack(current: currentPage()) {
+            show(target)
+            return
+        }
+        if canCloseOnBack {
+            onCloseRequested?()
+        }
     }
 
     func goForward() {
@@ -246,9 +275,9 @@ final class Tab: ObservableObject, Identifiable {
         if inverted { installInvertScript() }
     }
 
-    /// Tab-level back/forward availability = native in-page history OR the stack.
+    /// Tab-level back/forward availability = native in-page history OR the stack OR link-opened tab closable on back.
     private func syncNavFlags() {
-        canGoBack = webView.canGoBack || pageStack.canGoBack
+        canGoBack = webView.canGoBack || pageStack.canGoBack || canCloseOnBack
         canGoForward = webView.canGoForward || pageStack.canGoForward
     }
 

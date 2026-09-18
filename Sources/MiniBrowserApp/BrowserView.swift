@@ -37,7 +37,7 @@ struct BrowserView: View {
         .onChange(of: settings.windowOpacity) { _, new in window?.alphaValue = new }
         .onAppear {
             if model.tabs.isEmpty { model.restore() }   // restore previous session (or start page)
-            installZoomKeys()
+            installKeyShortcuts()
             if twoFingerSwipe == nil {
                 twoFingerSwipe = TwoFingerSwipe { [weak model] in model?.active }
             }
@@ -48,21 +48,55 @@ struct BrowserView: View {
         }
     }
 
-    /// ⌘+ / ⌘= (zoom in), ⌘- (zoom out), ⌘0 (reset) on the active tab's page.
+    /// Keyboard shortcuts:
+    /// - ⌘[ (back) and ⌘] (forward)
+    /// - ⌘+ / ⌘= (zoom in), ⌘- (zoom out), ⌘0 (reset)
+    ///
     /// A local key monitor is used (instead of SwiftUI shortcuts/commands) so it
     /// fires regardless of focus or menu state, even while the web view is first
     /// responder.
-    private func installZoomKeys() {
+    private func installKeyShortcuts() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.modifierFlags.contains(.command),
-                  let tab = model.active, tab.url != nil else { return event }
-            switch event.charactersIgnoringModifiers {
-            case "=", "+": tab.zoomIn();    return nil
-            case "-":      tab.zoomOut();   return nil
-            case "0":      tab.resetZoom(); return nil
-            default:       return event
+            guard !showTabs, let tab = model.active else { return event }
+            let flags = event.modifierFlags.intersection([.command, .shift, .control, .option])
+            guard flags.contains(.command) else { return event }
+
+            // ⌘[ (back) and ⌘] (forward) require Command ONLY (no Shift/Option/Control)
+            if flags == .command {
+                let chars = event.charactersIgnoringModifiers
+                if chars == "[" || event.keyCode == 33 {
+                    if tab.canGoBack { tab.goBack() }
+                    return nil
+                }
+                if chars == "]" || event.keyCode == 30 {
+                    if tab.canGoForward { tab.goForward() }
+                    return nil
+                }
             }
+
+            // ⌘+ / ⌘= (zoom in), ⌘- (zoom out), ⌘0 (reset)
+            if tab.url != nil {
+                switch event.charactersIgnoringModifiers {
+                case "=", "+":
+                    tab.zoomIn()
+                    return nil
+                case "-":
+                    if flags == .command {
+                        tab.zoomOut()
+                        return nil
+                    }
+                case "0":
+                    if flags == .command {
+                        tab.resetZoom()
+                        return nil
+                    }
+                default:
+                    break
+                }
+            }
+
+            return event
         }
     }
 }

@@ -54,4 +54,22 @@ final class TabsStateTests: XCTestCase {
         s.move(from: 0, to: 2)
         XCTAssertEqual(s.tabIDs, [b, c, a])
     }
+
+    func testClosingActiveSelectsPreferredWhenAvailable() {
+        var s = TabsState()
+        let a = UUID(), b = UUID(), c = UUID()
+        s.add(a); s.add(b); s.add(c)   // active == c
+        s.close(c, preferring: a)
+        XCTAssertEqual(s.tabIDs, [a, b])
+        XCTAssertEqual(s.activeID, a)
+    }
+
+    func testClosingActiveFallsBackWhenPreferredMissing() {
+        var s = TabsState()
+        let a = UUID(), b = UUID(), c = UUID()
+        s.add(a); s.add(b); s.add(c)   // active == c
+        s.close(c, preferring: UUID())
+        XCTAssertEqual(s.tabIDs, [a, b])
+        XCTAssertEqual(s.activeID, b)  // falls back to previous
+    }
 }

@@ -38,11 +38,20 @@ final class TabsModel: ObservableObject {
         // This is the ONLY place that assigns `tabs`.
         tabs = state.tabIDs.compactMap { tabsByID[$0] }
         activeID = state.activeID
+        let hasMultipleTabs = tabs.count > 1
+        for tab in tabs {
+            tab.canCloseOnBack = tab.openedByLink && hasMultipleTabs
+        }
     }
 
     @discardableResult
-    func newTab(configuration: WKWebViewConfiguration = WKWebViewConfiguration(), url: URL? = nil) -> Tab {
-        let tab = Tab(configuration: configuration)
+    func newTab(
+        configuration: WKWebViewConfiguration = WKWebViewConfiguration(),
+        url: URL? = nil,
+        openedByLink: Bool = false,
+        openerID: UUID? = nil
+    ) -> Tab {
+        let tab = Tab(configuration: configuration, openedByLink: openedByLink, openerID: openerID)
         register(tab)
         state.add(tab.id)
         sync()
@@ -51,8 +60,8 @@ final class TabsModel: ObservableObject {
         return tab
     }
 
-    func close(_ id: UUID) {
-        state.close(id)
+    func close(_ id: UUID, preferring preferredActiveID: UUID? = nil) {
+        state.close(id, preferring: preferredActiveID)
         tabsByID[id] = nil
         cancellables[id] = nil
         sync()
@@ -96,6 +105,10 @@ final class TabsModel: ObservableObject {
 
     private func register(_ tab: Tab) {
         tabsByID[tab.id] = tab
+        tab.onCloseRequested = { [weak self, weak tab] in
+            guard let self, let tab else { return }
+            self.close(tab.id, preferring: tab.openerID)
+        }
         // Persist (debounced) whenever a tab's URL, title, zoom, or inversion changes.
         cancellables[tab.id] = Publishers.Merge4(
             tab.$url.map { _ in () },

@@ -15,13 +15,15 @@ public struct TabsState: Equatable, Sendable {
         if tabIDs.contains(id) { activeID = id }
     }
 
-    public mutating func close(_ id: UUID) {
+    public mutating func close(_ id: UUID, preferring preferredActiveID: UUID? = nil) {
         guard let idx = tabIDs.firstIndex(of: id) else { return }
         let wasActive = (activeID == id)
         tabIDs.remove(at: idx)
         guard wasActive else { return }
         if tabIDs.isEmpty {
             activeID = nil
+        } else if let preferredActiveID, tabIDs.contains(preferredActiveID) {
+            activeID = preferredActiveID
         } else {
             // next neighbor if it exists at the same index, else the previous (now-last)
             activeID = tabIDs[min(idx, tabIDs.count - 1)]

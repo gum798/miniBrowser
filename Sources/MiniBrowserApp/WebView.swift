@@ -71,8 +71,14 @@ struct WebView: NSViewRepresentable {
                      for navigationAction: WKNavigationAction,
                      windowFeatures: WKWindowFeatures) -> WKWebView? {
             guard let model else { return nil }
-            let tab = model.newTab(configuration: configuration)
-            return tab.webView   // WebKit drives the load; preserves window.opener
+            let openerID = tab?.id
+            let newTab = model.newTab(configuration: configuration, openedByLink: true, openerID: openerID)
+            return newTab.webView   // WebKit drives the load; preserves window.opener
+        }
+
+        func webViewDidClose(_ webView: WKWebView) {
+            guard let tab, let model else { return }
+            model.close(tab.id, preferring: tab.openerID)
         }
 
         // Link clicks load into a NEW web view so the current page stays alive on
@@ -87,11 +93,17 @@ struct WebView: NSViewRepresentable {
                navigationAction.targetFrame?.isMainFrame == true,
                webView === tab.webView,                    // not a stacked background page
                tab.url != nil,                             // not the tab's very first load
-               let url = navigationAction.request.url,
-               LinkNavigation.shouldStack(url: url, currentURL: webView.url) {
-                decisionHandler(.cancel)
-                tab.pushNewPage(loading: url)
-                return
+               let url = navigationAction.request.url {
+                if navigationAction.modifierFlags.contains(.command), let model {
+                    decisionHandler(.cancel)
+                    model.newTab(url: url, openedByLink: true, openerID: tab.id)
+                    return
+                }
+                if LinkNavigation.shouldStack(url: url, currentURL: webView.url) {
+                    decisionHandler(.cancel)
+                    tab.pushNewPage(loading: url)
+                    return
+                }
             }
             decisionHandler(.allow)
         }
