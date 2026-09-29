@@ -329,10 +329,10 @@ final class Tab: ObservableObject, Identifiable {
     private static func invertScript(_ on: Bool) -> String {
         on ? """
         (function(){var d=document,id='__mb_invert__',s=d.getElementById(id);
-        if(!s){s=d.createElement('style');s.id=id;
+        if(!s){s=d.createElement('style');s.id=id;(d.head||d.documentElement).appendChild(s);}
         s.textContent='html{filter:invert(1) hue-rotate(180deg) !important;background:#fafafa !important}'
-        +'img,picture,video,canvas,iframe,svg,[style*=\\"background-image\\"]{filter:invert(1) hue-rotate(180deg) !important}';
-        (d.head||d.documentElement).appendChild(s);}})();
+        +'img,video,canvas,[style*=\\"background-image\\"]:empty{filter:invert(1) hue-rotate(180deg) !important}';
+        })();
         """ : "(function(){var s=document.getElementById('__mb_invert__');if(s)s.remove();})();"
     }
 
