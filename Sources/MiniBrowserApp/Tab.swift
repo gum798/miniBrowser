@@ -331,7 +331,8 @@ final class Tab: ObservableObject, Identifiable {
         (function(){var d=document,id='__mb_invert__',s=d.getElementById(id);
         if(!s){s=d.createElement('style');s.id=id;(d.head||d.documentElement).appendChild(s);}
         s.textContent='html{filter:invert(1) hue-rotate(180deg) !important;background:#fafafa !important}'
-        +'img,video,canvas,[style*=\\"background-image\\"]:empty{filter:invert(1) hue-rotate(180deg) !important}';
+        +'img,video,iframe,canvas,embed,object,[style*=\\"background-image\\"]:empty{filter:invert(1) hue-rotate(180deg) !important}'
+        +':fullscreen,:fullscreen *,:-webkit-full-screen,:-webkit-full-screen *{filter:none !important}';
         })();
         """ : "(function(){var s=document.getElementById('__mb_invert__');if(s)s.remove();})();"
     }
