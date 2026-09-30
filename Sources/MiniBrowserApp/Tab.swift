@@ -329,10 +329,13 @@ final class Tab: ObservableObject, Identifiable {
     private static func invertScript(_ on: Bool) -> String {
         on ? """
         (function(){var d=document,id='__mb_invert__',s=d.getElementById(id);
-        if(!s){s=d.createElement('style');s.id=id;(d.head||d.documentElement).appendChild(s);}
-        s.textContent='html{filter:invert(1) hue-rotate(180deg) !important;background:#fafafa !important}'
-        +'img,video,iframe,canvas,embed,object,[style*=\\"background-image\\"]:empty{filter:invert(1) hue-rotate(180deg) !important}'
-        +':fullscreen,:fullscreen *,:-webkit-full-screen,:-webkit-full-screen *{filter:none !important}';
+        if(!s){s=d.createElement('style');s.id=id;}
+        (d.head||d.documentElement).appendChild(s);
+        s.textContent='html,:root{filter:invert(1) hue-rotate(180deg) !important;background:#fafafa !important}'
+        +':not(#__mb_invert_guard__):not(#__mb_invert_guard2__) :is(img,image,video,iframe,canvas,embed,object,[style*=\\"background-image\\"]:empty),'
+        +'html:root :is(img,image,video,iframe,canvas,embed,object,[style*=\\"background-image\\"]:empty){filter:invert(1) hue-rotate(180deg) !important}'
+        +':fullscreen,:fullscreen *,:-webkit-full-screen,:-webkit-full-screen *,'
+        +':not(#__mb_invert_guard__):not(#__mb_invert_guard2__):fullscreen,:not(#__mb_invert_guard__):not(#__mb_invert_guard2__):fullscreen *{filter:none !important}';
         })();
         """ : "(function(){var s=document.getElementById('__mb_invert__');if(s)s.remove();})();"
     }
